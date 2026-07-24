@@ -1,0 +1,6 @@
+.claude/settings.local.json
+.vscode/
+.idea/
+*.log
+Thumbs.db
+desktop.ini
