@@ -14,13 +14,58 @@ Config.MaxAccounts   = 4         -- per character (enforced in Phase 1 UI flows)
 Config.AccountPrefix = 'SVB-'    -- account numbers look like SVB-0000123
 
 -- Account numbers 1–1000 are set aside for government/system accounts;
--- player accounts begin at SVB-0001001. Named entries pin specific numbers
--- (Phase 2 society accounts — sheriff, medical, tax office — join this list).
+-- player accounts begin at SVB-0001001. Named entries pin specific numbers.
 Config.ReservedNumbers = {
   max = 1000,                    -- last reserved number
   ['SYS-GOV']       = 1,         -- Government Fund  -> SVB-0000001
   ['SYS-INSURANCE'] = 2,         -- Insurance Fund   -> SVB-0000002
+  -- Society accounts (design §5.8) — seeded from Config.Societies below.
+  ['sheriff']       = 10,        -- Sheriff's Office -> SVB-0000010
+  ['medical']       = 11,        -- Medical Fund     -> SVB-0000011
+  ['tax_office']    = 12,        -- Tax Office       -> SVB-0000012
 }
+
+-- ============================================================================
+-- Societies (design §5.8) — shared org funds owned by the bank.
+-- jobs: VORP job names that belong to the society (match your jobs.json /
+-- whitelist setup). bossGrade: minimum job grade for boss actions (view
+-- ledger, deposit/withdraw society funds, run payroll).
+-- ============================================================================
+Config.Societies = {
+  {
+    id = 'sheriff',
+    name = "Sheriff's Office",
+    jobs = { 'sheriff', 'deputy', 'marshal' },
+    bossGrade = 3,
+  },
+  {
+    id = 'medical',
+    name = 'Medical Fund',
+    jobs = { 'doctor', 'nurse' },
+    bossGrade = 3,
+  },
+  {
+    id = 'tax_office',
+    name = 'Tax Office',
+    jobs = { 'taxcollector' },
+    bossGrade = 2,
+  },
+}
+
+-- ============================================================================
+-- Billing (design §5.7) — invoices are civil; fines/taxes are government debt.
+-- Due windows are REAL-LIFE days from issue; the §5.14 tiers then run off
+-- Config.Collections.
+-- ============================================================================
+Config.Billing = {
+  invoiceDueDays = 3,
+  fineDueDays    = 3,
+  taxDueDays     = 7,
+  maxOpenPerIssuer = 25,  -- anti-spam: open invoices one issuer may hold
+}
+
+-- Delinquency sweep cadence (tech spec §9.2)
+Config.Scheduler = { sweepMinutes = 15 }
 
 Config.LogLevel      = 'info'    -- debug | info | warn | error
 Config.AutoRunSchema = true      -- run sql/install.sql (idempotent) on boot

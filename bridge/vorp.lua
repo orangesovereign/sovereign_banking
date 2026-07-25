@@ -146,5 +146,40 @@ end
 function Bridge.GetJob(src)
   local char = getCharacter(src)
   if not char then return nil end
-  return char.job, char.jobGrade
+  return char.job, tonumber(char.jobGrade or char.jobgrade) or 0
+end
+
+--- Display name for a character (statement/roster rendering), or the charid
+--- itself when unknown. VORP characters-table coupling lives here.
+function Bridge.GetCharName(charid)
+  local row = Db.single(
+    'SELECT firstname, lastname FROM characters WHERE charidentifier = ? LIMIT 1',
+    { tostring(charid) })
+  if not row then return tostring(charid) end
+  return (('%s %s'):format(row.firstname or '', row.lastname or '')):gsub('^%s+', ''):gsub('%s+$', '')
+end
+
+--- Roster for a society (design §5.8 payroll): every character holding one of
+--- the given VORP job names. Offline characters included — payroll pays into
+--- bank accounts, not wallets.
+function Bridge.GetCharactersByJob(jobs)
+  if type(jobs) ~= 'table' or #jobs == 0 then return {} end
+  local marks = {}
+  for i = 1, #jobs do marks[i] = '?' end
+  local rows = Db.query(([[
+    SELECT charidentifier, firstname, lastname, job, jobgrade
+    FROM characters WHERE job IN (%s)
+    ORDER BY jobgrade DESC, lastname ASC
+  ]]):format(table.concat(marks, ', ')), jobs) or {}
+  local out = {}
+  for _, r in ipairs(rows) do
+    out[#out + 1] = {
+      charid = tostring(r.charidentifier),
+      name = (('%s %s'):format(r.firstname or '', r.lastname or ''))
+        :gsub('^%s+', ''):gsub('%s+$', ''),
+      job = r.job,
+      grade = tonumber(r.jobgrade) or 0,
+    }
+  end
+  return out
 end

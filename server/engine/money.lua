@@ -514,6 +514,82 @@ end
 -- meta.crossBranch selects the cross-branch ("wire") fee.
 -- ============================================================================
 
+-- ============================================================================
+-- Disburse (one account → many, atomic — tech spec §8.3 payroll).
+-- credits: { {accountId=, amount=, memo=}, ... } — deduped by the caller.
+-- Either the source covers the full total and every credit lands, or nothing
+-- moves at all.
+-- ============================================================================
+
+function Money.disburse(fromAccountId, credits, currency, meta)
+  meta = meta or {}
+  fromAccountId = tonumber(fromAccountId)
+  if not fromAccountId then return false, Err.NO_ACCOUNT end
+  if type(credits) ~= 'table' or #credits == 0 then return false, Err.PAYROLL_EMPTY end
+  if #credits > 100 then return false, Err.BAD_AMOUNT end
+
+  local total = 0
+  local seen = {}
+  for _, c in ipairs(credits) do
+    local id = tonumber(c.accountId)
+    local ok, err = checkCurrencyAndAmount(currency, c.amount)
+    if not ok then return false, err end
+    if not id or id == fromAccountId then return false, Err.NO_ACCOUNT end
+    if seen[id] then return false, Err.SAME_ACCOUNT end -- caller must pre-fold dupes
+    seen[id] = true
+    total = total + c.amount
+  end
+  if not Util.isValidAmount(total) then return false, Err.BAD_AMOUNT end
+
+  local lockKeys = { 'acct:' .. fromAccountId }
+  for id in pairs(seen) do lockKeys[#lockKeys + 1] = 'acct:' .. id end
+
+  return Money.withLocks(lockKeys, function()
+    if meta.idem then
+      local row = Ledger.findByUuid(meta.idem)
+      if row then return true, replayOf(row) end
+    end
+
+    local from = Accounts.getById(fromAccountId)
+    if not from then return false, Err.NO_ACCOUNT end
+    if from.status ~= 'active' then return false, statusErr(from.status) end
+
+    local col = Constants.CurrencyColumn[currency]
+    local fromBal = tonumber(from[col]) or 0
+    local floorBal = debitFloor(from, meta)
+    if fromBal - total < floorBal then
+      return false, floorBal < 0 and Err.NO_CREDIT or Err.INSUFFICIENT_FUNDS
+    end
+
+    local primaryUuid = meta.idem or Util.uuid()
+    local legs = {
+      { -- single debit for the whole batch
+        acct = from, currency = currency, delta = -total, floorBal = floorBal,
+        uuid = primaryUuid, category = meta.category or Constants.Category.PAYROLL,
+        memo = meta.memo, source = meta.source,
+      },
+    }
+    for _, c in ipairs(credits) do
+      local to = Accounts.getById(c.accountId)
+      if not to then return false, Err.NO_ACCOUNT end
+      if to.status ~= 'active' then return false, statusErr(to.status) end
+      legs[#legs + 1] = {
+        acct = to, currency = currency, delta = c.amount,
+        uuid = Util.uuid(), category = meta.category or Constants.Category.PAYROLL,
+        memo = c.memo or meta.memo, source = meta.source,
+        counterparty = fromAccountId,
+      }
+    end
+
+    local status, data = commitLegs(legs)
+    if status == 'replay' then return true, replayOf(data) end
+    if status == 'fail' then return false, data end
+
+    announceLegs(legs)
+    return true, { txId = primaryUuid, total = total, balanceAfter = fromBal - total }
+  end)
+end
+
 function Money.transfer(fromAccountId, toAccountId, currency, amount, meta)
   meta = meta or {}
   local ok, err = checkCurrencyAndAmount(currency, amount)

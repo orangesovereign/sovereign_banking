@@ -143,6 +143,87 @@ function API.Withdraw(charid, accountId, currency, amount, opts)
 end
 
 -- ============================================================================
+-- Societies (design §6.1 — law, medical, tax office, gangs)
+-- ============================================================================
+
+function API.AddToSociety(society, currency, amount, opts)
+  return Society.credit(society, currency, amount, buildMeta(opts, Constants.Category.ADD))
+end
+
+function API.RemoveFromSociety(society, currency, amount, opts)
+  return Society.debit(society, currency, amount, buildMeta(opts, Constants.Category.REMOVE))
+end
+
+--- Balance in minor units, or nil for an unknown society.
+function API.GetSocietyBalance(society, currency)
+  return Society.balance(society, currency)
+end
+
+--- Society account row (id, number, balances), or nil.
+function API.GetSocietyAccount(society)
+  return Society.account(society)
+end
+
+--- Atomic batch payroll (tech spec §8.3). payrollTable:
+--- { {charid=, amount=, memo=}, ... } — amounts in minor units, paid into
+--- each hand's primary bank account. All-or-nothing.
+function API.RunPayroll(society, payrollTable, opts)
+  return Society.payroll(society, payrollTable, buildMeta(opts, Constants.Category.PAYROLL))
+end
+
+-- ============================================================================
+-- Bills (design §6.1) — invoices civil, fines/taxes government
+-- ============================================================================
+
+--- Civil invoice: character or society bills a character.
+--- issuer = charid string, or { type='society', id='sheriff' }.
+function API.IssueInvoice(issuer, targetCharid, currency, amount, memo, opts)
+  local meta = buildMeta(opts, Constants.Category.INVOICE)
+  local who
+  if type(issuer) == 'table' and issuer.type == 'society' then
+    who = { type = 'society', id = issuer.id }
+  else
+    who = { type = 'character', id = tostring(issuer) }
+  end
+  return Billing.issue(Constants.BillKind.INVOICE, who, targetCharid, currency,
+    amount, memo, { dueDays = opts and opts.dueDays, source = meta.source, idem = meta.idem })
+end
+
+--- Government fine (called by the lawman script — design §6.4).
+function API.IssueFine(targetCharid, currency, amount, memo, opts)
+  local meta = buildMeta(opts, Constants.Category.FINE)
+  return Billing.issue(Constants.BillKind.FINE, { type = 'system', id = 'SYS-GOV' },
+    targetCharid, currency, amount, memo,
+    { dueDays = opts and opts.dueDays, source = meta.source, idem = meta.idem })
+end
+
+--- Government tax (called by the Tax Office — design §5.7).
+function API.LevyTax(targetCharid, currency, amount, memo, opts)
+  local meta = buildMeta(opts, Constants.Category.TAX)
+  return Billing.issue(Constants.BillKind.TAX, { type = 'system', id = 'SYS-GOV' },
+    targetCharid, currency, amount, memo,
+    { dueDays = opts and opts.dueDays, source = meta.source, idem = meta.idem })
+end
+
+--- Settle a bill on a character's behalf (booking desk auto-debit, etc.).
+--- payWith = 'wallet' | accountId. amount nil = pay in full.
+function API.PayBill(billId, payerCharid, payWith, amount, opts)
+  local meta = buildMeta(opts, nil)
+  return Billing.pay(billId, payerCharid, payWith or 'wallet', amount, { source = meta.source })
+end
+
+--- Cancel an open bill (issuer-side tooling).
+function API.CancelBill(billId, opts)
+  local meta = buildMeta(opts, nil)
+  return Billing.cancel(billId, { source = meta.source })
+end
+
+--- What a character owes, by tier (design §6.1 GetDebtStatus).
+function API.GetDebtStatus(charid)
+  return Billing.debtStatus(charid)
+end
+
+-- ============================================================================
 -- Ops
 -- ============================================================================
 
@@ -166,3 +247,15 @@ exports('Deposit', API.Deposit)
 exports('Withdraw', API.Withdraw)
 exports('GetTransactions', API.GetTransactions)
 exports('Reconcile', API.Reconcile)
+-- Phase 2: societies & billing
+exports('AddToSociety', API.AddToSociety)
+exports('RemoveFromSociety', API.RemoveFromSociety)
+exports('GetSocietyBalance', API.GetSocietyBalance)
+exports('GetSocietyAccount', API.GetSocietyAccount)
+exports('RunPayroll', API.RunPayroll)
+exports('IssueInvoice', API.IssueInvoice)
+exports('IssueFine', API.IssueFine)
+exports('LevyTax', API.LevyTax)
+exports('PayBill', API.PayBill)
+exports('CancelBill', API.CancelBill)
+exports('GetDebtStatus', API.GetDebtStatus)

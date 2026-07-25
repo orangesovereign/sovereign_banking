@@ -66,6 +66,23 @@ Constants.SystemAccounts = {
   GOV       = 'SYS-GOV',       -- government fund: taxes, fines
 }
 
+-- Bills (design §5.7 / §5.14)
+Constants.BillKind = { INVOICE = 'invoice', FINE = 'fine', TAX = 'tax' }
+
+Constants.BillStatus = {
+  PENDING        = 'pending',
+  OVERDUE        = 'overdue',        -- tier 1
+  IN_COLLECTIONS = 'in_collections', -- tier 2
+  WARRANT        = 'warrant',        -- tier 3, government debt only
+  PAID           = 'paid',
+  CANCELLED      = 'cancelled',
+  EXPIRED        = 'expired',
+}
+
+-- Government debt can escalate to a lawman warrant; civil debt never does
+-- (design §5.14 hard rule).
+Constants.GovDebt = { fine = true, tax = true, invoice = false }
+
 -- Error codes (tech spec §5.2) — every mutating call returns (ok, resultOrCode)
 Constants.Err = {
   BAD_AMOUNT         = 'ERR_BAD_AMOUNT',
@@ -87,5 +104,10 @@ Constants.Err = {
   ACCOUNT_LIMIT      = 'ERR_ACCOUNT_LIMIT',
   NOT_EMPTY          = 'ERR_NOT_EMPTY',
   RATE_LIMITED       = 'ERR_RATE_LIMITED',
+  NO_SOCIETY         = 'ERR_NO_SOCIETY',
+  NOT_BOSS           = 'ERR_NOT_BOSS',
+  NO_BILL            = 'ERR_NO_BILL',
+  BILL_CLOSED        = 'ERR_BILL_CLOSED',
+  PAYROLL_EMPTY      = 'ERR_PAYROLL_EMPTY',
   INTERNAL           = 'ERR_INTERNAL',
 }

@@ -46,3 +46,23 @@ end)
 AddEventHandler('sov_bank:server:transfer', function(fromAccountId, toAccountId, currency, amount, opts)
   API.Transfer(fromAccountId, toAccountId, currency, amount, opts)
 end)
+
+AddEventHandler('sov_bank:server:addToSociety', function(society, currency, amount, opts)
+  API.AddToSociety(society, currency, amount, opts)
+end)
+
+AddEventHandler('sov_bank:server:removeFromSociety', function(society, currency, amount, opts)
+  API.RemoveFromSociety(society, currency, amount, opts)
+end)
+
+AddEventHandler('sov_bank:server:issueInvoice', function(issuer, targetCharid, currency, amount, memo, opts)
+  API.IssueInvoice(issuer, targetCharid, currency, amount, memo, opts)
+end)
+
+AddEventHandler('sov_bank:server:issueFine', function(targetCharid, currency, amount, memo, opts)
+  API.IssueFine(targetCharid, currency, amount, memo, opts)
+end)
+
+AddEventHandler('sov_bank:server:levyTax', function(targetCharid, currency, amount, memo, opts)
+  API.LevyTax(targetCharid, currency, amount, memo, opts)
+end)

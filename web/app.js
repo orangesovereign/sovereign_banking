@@ -59,6 +59,11 @@ const ERR_TEXT = {
   ERR_ACCOUNT_LIMIT: 'You hold as many accounts as the bank allows.',
   ERR_NOT_EMPTY: 'The account must be emptied before it can be closed.',
   ERR_RATE_LIMITED: 'One moment, please.',
+  ERR_NO_SOCIETY: 'You hold no position with any society.',
+  ERR_NOT_BOSS: 'Only the head of the outfit may do that.',
+  ERR_NO_BILL: 'No such bill on our books.',
+  ERR_BILL_CLOSED: 'That bill is already settled.',
+  ERR_PAYROLL_EMPTY: 'No hands were marked for pay.',
   ERR_INTERNAL: 'The clerk fumbled the paperwork. Try again.',
 };
 const errText = (code) => ERR_TEXT[code] || ERR_TEXT.ERR_INTERNAL;
@@ -265,19 +270,23 @@ function selectAccount(id) {
 // ----------------------------------------------------------- right sidebar
 
 function renderActions() {
+  const openBills = S.data?.openBills || 0;
   const rows = [
     { icon: I.transfer, label: 'Transfer Funds', run: () => modalTransfer() },
     { icon: I.columns, label: 'Request Loan', soon: true },
     { icon: I.safe, label: 'Safety Deposit Boxes', soon: true },
-    { icon: I.bill, label: 'Pay Bills / Taxes', soon: true },
-    { icon: I.people, label: 'Society Accounts', soon: true },
+    { icon: I.bill, label: 'Pay Bills / Taxes', run: () => modalBills(), badge: openBills },
+    ...(S.data?.society
+      ? [{ icon: I.people, label: S.data.society.name, run: () => modalSociety() }]
+      : [{ icon: I.people, label: 'Society Accounts', soon: true }]),
     { icon: I.plus, label: 'Open New Account', run: () => modalOpenAccount() },
     { icon: I.key, label: 'Account Access', run: () => modalAccess() },
   ];
   $('#actions').innerHTML = rows.map((r, i) => `
     <button class="action-row ${r.soon ? 'soon' : ''}" data-i="${i}">
       <span class="a-icon">${r.icon()}</span>
-      <span class="a-label">${r.label}</span>
+      <span class="a-label">${esc(r.label)}</span>
+      ${r.badge ? `<span class="a-badge">${r.badge}</span>` : ''}
       <span class="a-chev">${I.chev()}</span>
     </button>`).join('');
   document.querySelectorAll('.action-row').forEach((el) =>
@@ -309,7 +318,7 @@ function renderQuickActions() {
     { icon: I.bag, label: 'Deposit', run: () => modalMove('deposit') },
     { icon: I.cash, label: 'Withdraw', run: () => modalMove('withdraw') },
     { icon: I.transfer, label: 'Transfer', run: () => modalTransfer() },
-    { icon: I.bill, label: 'Pay Bill / Tax', soon: true },
+    { icon: I.bill, label: 'Pay Bill / Tax', run: () => modalBills() },
     { icon: I.papers, label: 'View Loans', soon: true },
     { icon: I.safe, label: 'SDB Access', soon: true },
   ];
@@ -367,8 +376,10 @@ function applySnapshot(data) {
   if (!data) return;
   if (data.accounts) S.data.accounts = data.accounts;
   if (data.wallet) S.data.wallet = data.wallet;
+  if (data.openBills != null) S.data.openBills = data.openBills;
   renderCash();
   renderAccounts();
+  renderActions();
 }
 
 /* Deposit / Withdraw against the selected account. */
@@ -571,6 +582,187 @@ async function modalAccess() {
     renderAccounts();
     S.page = 0;
     loadLedger();
+  });
+}
+
+/* Bills — open invoices, fines and taxes, settled at the counter. */
+const BILL_STAMP = { invoice: '', fine: 'neg', tax: 'gold' };
+
+async function modalBills() {
+  openModal('Bills, Fines & Taxes', '<p class="hint">The clerk thumbs through the register…</p>');
+  const res = await rpc('bills');
+  if (!res.ok) { closeModal(); return toast(errText(res.error), 'error'); }
+  if (!modalIsOpen()) return;
+  renderBillsBody(res.data.rows || []);
+}
+
+function renderBillsBody(rows) {
+  const paySources = [
+    { v: 'wallet', label: `Cash in hand (${fmt(S.data?.wallet?.money || 0)})` },
+    ...(S.data?.accounts || []).filter(canWithdraw).map((a) =>
+      ({ v: a.id, label: `${a.name} — ${a.number} (${fmt(a.balances.money)})` })),
+  ];
+  $('#modal-root .modal-body').innerHTML = rows.length ? `
+    ${rows.map((b) => `
+      <div class="bill-row" data-bill="${b.id}">
+        <div class="bill-main">
+          <span class="badge bill-stamp ${BILL_STAMP[b.kind] || ''}">${esc(b.kind)}</span>
+          <span class="bill-meta">
+            <b>${esc(b.issuer)}</b>${b.memo ? ` — ${esc(b.memo)}` : ''}
+            <span class="bill-sub">${esc(b.status).replace('_', ' ')} ·
+              due ${fmtLedgerDate(b.dueAt)}</span>
+          </span>
+          <span class="bill-amt">${fmt(b.remaining, b.currency === 1 ? 'gold' : 'money')}</span>
+        </div>
+        <div class="bill-pay">
+          <select class="bp-src">${paySources.map((s) =>
+            `<option value="${s.v}">${esc(s.label)}</option>`).join('')}</select>
+          <input type="text" class="bp-amt" inputmode="decimal"
+            value="${((b.remaining || 0) / 100).toFixed(2)}" title="Amount to pay">
+          <button class="btn slim primary bp-go">Pay</button>
+        </div>
+      </div>`).join('')}
+    <p class="hint">Partial payments are accepted; the remainder stays on the books.
+      Unpaid government debt finds its way to the law.</p>`
+    : '<p class="hint" style="text-align:center;padding:20px 0">Nothing owed. The clerk seems almost disappointed.</p>';
+
+  document.querySelectorAll('.bill-row .bp-go').forEach((btn) =>
+    btn.addEventListener('click', async () => {
+      const row = btn.closest('.bill-row');
+      const amount = toMinor(row.querySelector('.bp-amt').value);
+      if (!amount) return toast(errText('ERR_BAD_AMOUNT'), 'error');
+      const src = row.querySelector('.bp-src').value;
+      const res = await rpc('payBill', {
+        billId: Number(row.dataset.bill),
+        payWith: src === 'wallet' ? 'wallet' : Number(src),
+        amount,
+      });
+      if (!res.ok) return toast(errText(res.error), 'error');
+      applySnapshot(res.data);
+      toast(res.data.result.closed
+        ? 'Debt settled. The clerk stamps the bill PAID.'
+        : `Paid ${fmt(res.data.result.applied)} — ${fmt(res.data.result.remaining)} remains.`);
+      renderBillsBody(res.data.bills || []);
+      S.page = 0;
+      loadLedger();
+    }));
+}
+
+/* Society desk — fund overview for members, full controls for the boss. */
+async function modalSociety() {
+  const socMeta = S.data?.society;
+  if (!socMeta) return toast(errText('ERR_NO_SOCIETY'), 'error');
+  openModal(esc(socMeta.name), '<p class="hint">The clerk fetches the society ledger…</p>');
+  const res = await rpc('society');
+  if (!res.ok) { closeModal(); return toast(errText(res.error), 'error'); }
+  if (!modalIsOpen()) return;
+  renderSocietyBody(res.data);
+}
+
+function renderSocietyBody(d) {
+  const bossBlock = d.isBoss ? `
+    <div class="form-row" style="margin-top:16px">
+      <div class="field"><label>Amount</label>
+        <input type="text" id="soc-amt" inputmode="decimal" placeholder="0.00"></div>
+      <button class="btn" id="soc-dep">Deposit</button>
+      <button class="btn" id="soc-wd">Withdraw</button>
+    </div>
+    <div class="col-head" style="margin-top:14px">Payroll</div>
+    ${(d.roster || []).length ? `
+      <table class="payroll">
+        <thead><tr><th></th><th>Hand</th><th>Grade</th><th class="num">Wage</th></tr></thead>
+        <tbody>
+          ${d.roster.map((m, i) => `
+            <tr>
+              <td><input type="checkbox" class="pr-on" data-i="${i}" checked></td>
+              <td>${esc(m.name)}<span class="bill-sub" style="display:inline;margin-left:8px">#${esc(m.charid)}</span></td>
+              <td>${esc(String(m.grade))}</td>
+              <td class="num"><input type="text" class="pr-amt" data-i="${i}"
+                inputmode="decimal" placeholder="0.00" style="min-width:80px;width:80px;text-align:right"></td>
+            </tr>`).join('')}
+        </tbody>
+      </table>
+      <div class="form-row" style="margin-top:12px">
+        <button class="btn primary" id="pr-run">Run Payroll</button>
+        <span class="hint" id="pr-total" style="align-self:center">Total: $0.00</span>
+      </div>
+      <p class="hint">Wages are paid into each hand's bank account — present or not,
+        their money will be waiting at the counter.</p>`
+      : '<p class="hint">No hands on the books for this outfit.</p>'}
+    ${(d.recent || []).length ? `
+      <div class="col-head" style="margin-top:14px">Recent Entries</div>
+      ${d.recent.map((r) => `
+        <div class="access-row">
+          <span>${fmtLedgerDate(r.created_at)} — ${esc(r.memo || r.category)}</span>
+          <b class="${r.direction === 'credit' ? 'amt-pos' : 'amt-neg'}">
+            ${r.direction === 'credit' ? '+' : '-'}${fmt(r.amount)}</b>
+        </div>`).join('')}` : ''}`
+    : '<p class="hint">Only the head of the outfit may move these funds.</p>';
+
+  $('#modal-root .modal-body').innerHTML = `
+    <div class="detail-head" style="margin-bottom:6px">
+      <div>
+        <div class="acct-name" style="font-size:13px">${esc(d.name)}</div>
+        <div class="acct-number">№ ${esc(d.account.number)}</div>
+      </div>
+      <div class="detail-balance"><div class="money">${fmt(d.account.balance)}</div></div>
+    </div>
+    ${bossBlock}`;
+
+  if (!d.isBoss) return;
+
+  const refresh = async () => {
+    const r = await rpc('society');
+    if (r.ok && modalIsOpen()) renderSocietyBody(r.data);
+  };
+
+  $('#soc-dep')?.addEventListener('click', async () => {
+    const amount = toMinor($('#soc-amt').value);
+    if (!amount) return toast(errText('ERR_BAD_AMOUNT'), 'error');
+    const res = await rpc('societyDeposit', { amount });
+    if (!res.ok) return toast(errText(res.error), 'error');
+    applySnapshot(res.data);
+    toast(`Deposited ${fmt(amount)} to the fund.`);
+    refresh();
+  });
+  $('#soc-wd')?.addEventListener('click', async () => {
+    const amount = toMinor($('#soc-amt').value);
+    if (!amount) return toast(errText('ERR_BAD_AMOUNT'), 'error');
+    const res = await rpc('societyWithdraw', { amount });
+    if (!res.ok) return toast(errText(res.error), 'error');
+    applySnapshot(res.data);
+    toast(`Withdrew ${fmt(amount)} from the fund.`);
+    refresh();
+  });
+
+  const totalLine = () => {
+    let total = 0;
+    document.querySelectorAll('.pr-on:checked').forEach((cb) => {
+      total += toMinor(document.querySelector(`.pr-amt[data-i="${cb.dataset.i}"]`)?.value) || 0;
+    });
+    $('#pr-total').textContent = `Total: ${fmt(total)}`;
+    return total;
+  };
+  document.querySelectorAll('.pr-amt, .pr-on').forEach((el) => {
+    el.addEventListener('input', totalLine);
+    el.addEventListener('change', totalLine);
+  });
+
+  $('#pr-run')?.addEventListener('click', async () => {
+    const entries = [];
+    document.querySelectorAll('.pr-on:checked').forEach((cb) => {
+      const i = Number(cb.dataset.i);
+      const amount = toMinor(document.querySelector(`.pr-amt[data-i="${i}"]`)?.value);
+      if (amount) entries.push({ charid: d.roster[i].charid, amount });
+    });
+    if (!entries.length) return toast(errText('ERR_PAYROLL_EMPTY'), 'error');
+    const res = await rpc('societyPayroll', { entries });
+    if (!res.ok) return toast(errText(res.error), 'error');
+    applySnapshot(res.data);
+    toast(`Payroll run — ${fmt(res.data.result.total)} to ${res.data.result.paid.length} hands.`);
+    S.page = 0;
+    loadLedger();
+    refresh();
   });
 }
 

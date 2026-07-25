@@ -48,6 +48,7 @@ CreateThread(function()
   Db.execute(('ALTER TABLE sov_bank_accounts AUTO_INCREMENT = %d'):format(floor))
 
   Accounts.ensureSystemAccounts()
+  Society.ensureAccounts()
 
   -- Resource restarted mid-session: make sure everyone already in has a
   -- primary account.

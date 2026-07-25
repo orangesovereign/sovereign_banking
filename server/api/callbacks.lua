@@ -139,6 +139,13 @@ end
 -- Handlers
 -- ============================================================================
 
+--- Society membership block for the teller payload (nil when jobless).
+local function societyInfo(src)
+  local soc, isBoss = Society.forSource(src)
+  if not soc then return nil end
+  return { id = soc.id, name = soc.name, isBoss = isBoss }
+end
+
 handlers['getTellerData'] = guarded(function(ctx)
   Accounts.ensurePrimary(ctx.charid)
   return okWith(ctx, {
@@ -149,6 +156,8 @@ handlers['getTellerData'] = guarded(function(ctx)
       hours = ctx.branch.hours,
       features = ctx.branch.features or {},
     },
+    society = societyInfo(ctx.src),
+    openBills = #Billing.listOpenFor(ctx.charid),
     config = {
       currencies = Config.Currencies,
       maxAccounts = Config.MaxAccounts,
@@ -280,4 +289,146 @@ handlers['revokeAccess'] = guarded(function(ctx, p)
   local ok, res = Accounts.revokeAccess(p.accountId, ctx.charid, tostring(p.charid or ''))
   if not ok then return { ok = false, error = res } end
   return { ok = true, data = {} }
+end)
+
+-- ============================================================================
+-- Bills (design §5.7 — settled in person at the counter)
+-- ============================================================================
+
+local function issuerDisplay(bill)
+  if bill.issuer_type == 'society' then
+    local soc = Society.get(bill.issuer_id)
+    return soc and soc.name or bill.issuer_id
+  end
+  if bill.issuer_type == 'character' then
+    return Bridge.GetCharName(bill.issuer_id)
+  end
+  return 'Sovereign County'
+end
+
+local function billView(bill)
+  return {
+    id = bill.id,
+    kind = bill.kind,
+    status = bill.status,
+    amount = tonumber(bill.amount) or 0,
+    remaining = tonumber(bill.balance_remaining) or 0,
+    currency = tonumber(bill.currency) or 0,
+    memo = bill.memo,
+    issuer = issuerDisplay(bill),
+    dueAt = tonumber(bill.due_epoch),
+    createdAt = tonumber(bill.created_epoch),
+  }
+end
+
+handlers['bills'] = guarded(function(ctx)
+  local rows = {}
+  for _, bill in ipairs(Billing.listOpenFor(ctx.charid)) do
+    rows[#rows + 1] = billView(bill)
+  end
+  return { ok = true, data = { rows = rows } }
+end)
+
+handlers['payBill'] = guarded(function(ctx, p)
+  local payWith = p.payWith
+  if payWith ~= 'wallet' then
+    payWith = tonumber(payWith)
+    if not payWith or not Accounts.hasLevel(payWith, ctx.charid, 'withdraw') then
+      return { ok = false, error = Err.ACCESS }
+    end
+  end
+  local amount = p.amount ~= nil and parseAmount(p.amount) or nil
+  if p.amount ~= nil and not amount then return { ok = false, error = Err.BAD_AMOUNT } end
+
+  local ok, res = Billing.pay(p.billId, ctx.charid, payWith, amount, { source = 'sov_bank' })
+  if not ok then return { ok = false, error = res } end
+
+  local rows = {}
+  for _, bill in ipairs(Billing.listOpenFor(ctx.charid)) do
+    rows[#rows + 1] = billView(bill)
+  end
+  return okWith(ctx, { result = res, bills = rows, openBills = #rows })
+end)
+
+-- ============================================================================
+-- Society desk (design §5.8 — boss actions re-verified server-side each call)
+-- ============================================================================
+
+--- Society context guard: returns soc, isBoss, account (or responds w/ error).
+local function societyCtx(ctx, needBoss)
+  local soc, isBoss = Society.forSource(ctx.src)
+  if not soc then return nil, { ok = false, error = Err.NO_SOCIETY } end
+  if needBoss and not isBoss then return nil, { ok = false, error = Err.NOT_BOSS } end
+  local acct = Society.account(soc.id)
+  if not acct then return nil, { ok = false, error = Err.NO_SOCIETY } end
+  return { soc = soc, isBoss = isBoss, acct = acct }
+end
+
+handlers['society'] = guarded(function(ctx)
+  local sctx, errRes = societyCtx(ctx, false)
+  if not sctx then return errRes end
+
+  local data = {
+    id = sctx.soc.id,
+    name = sctx.soc.name,
+    isBoss = sctx.isBoss,
+    account = {
+      id = sctx.acct.id,
+      number = sctx.acct.account_number,
+      balance = tonumber(sctx.acct.balance_money) or 0,
+    },
+  }
+  if sctx.isBoss then
+    data.roster = Society.roster(sctx.soc.id)
+    data.recent = Ledger.getTransactions(sctx.acct.id, { limit = 8 })
+  end
+  return { ok = true, data = data }
+end)
+
+handlers['societyDeposit'] = guarded(function(ctx, p)
+  local sctx, errRes = societyCtx(ctx, true)
+  if not sctx then return errRes end
+  local amount = parseAmount(p.amount)
+  if not amount then return { ok = false, error = Err.BAD_AMOUNT } end
+  local ok, res = Money.deposit(ctx.charid, sctx.acct.id, Constants.Currency.MONEY, amount, {
+    category = Constants.Category.DEPOSIT,
+    source = 'sov_bank',
+    memo = ('%s fund deposit — %s'):format(sctx.soc.name, ctx.branch.name),
+  })
+  if not ok then return { ok = false, error = res } end
+  return okWith(ctx, { result = res })
+end)
+
+handlers['societyWithdraw'] = guarded(function(ctx, p)
+  local sctx, errRes = societyCtx(ctx, true)
+  if not sctx then return errRes end
+  local amount = parseAmount(p.amount)
+  if not amount then return { ok = false, error = Err.BAD_AMOUNT } end
+  local ok, res = Money.withdraw(ctx.charid, sctx.acct.id, Constants.Currency.MONEY, amount, {
+    category = Constants.Category.WITHDRAW,
+    source = 'sov_bank',
+    memo = ('%s fund withdrawal — %s'):format(sctx.soc.name, ctx.branch.name),
+  })
+  if not ok then return { ok = false, error = res } end
+  return okWith(ctx, { result = res })
+end)
+
+handlers['societyPayroll'] = guarded(function(ctx, p)
+  local sctx, errRes = societyCtx(ctx, true)
+  if not sctx then return errRes end
+  if type(p.entries) ~= 'table' or #p.entries == 0 or #p.entries > 50 then
+    return { ok = false, error = Err.PAYROLL_EMPTY }
+  end
+  local entries = {}
+  for _, e in ipairs(p.entries) do
+    local amount = parseAmount(e and e.amount)
+    if not amount then return { ok = false, error = Err.BAD_AMOUNT } end
+    entries[#entries + 1] = { charid = tostring(e.charid or ''), amount = amount }
+  end
+  local ok, res = Society.payroll(sctx.soc.id, entries, {
+    source = 'sov_bank',
+    memo = ('%s payroll — run by %s'):format(sctx.soc.name, ctx.charid),
+  })
+  if not ok then return { ok = false, error = res } end
+  return okWith(ctx, { result = res })
 end)

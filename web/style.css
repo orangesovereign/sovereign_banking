@@ -368,6 +368,20 @@ td.num {
 .action-row .a-chev { width: 14px; height: 14px; color: var(--ink-3); }
 .action-row.soon { opacity: 0.45; }
 
+.a-badge {
+  min-width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--neg);
+  color: #f3ead3;
+  font-size: 11px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 5px;
+}
+
 .branch-info { text-align: left; padding-top: 4px; }
 .branch-art { width: 210px; height: 130px; color: var(--ink-2); display: block; margin: 4px 0 10px; }
 .branch-name {
@@ -586,6 +600,56 @@ input[type="text"]:focus { outline: 1px solid var(--gold); }
   vertical-align: 1px;
 }
 .badge.owner { border-color: var(--gold-2); color: var(--gold-2); }
+
+/* ==================================================================== bills */
+
+.bill-row {
+  border-bottom: 1px solid var(--line-soft);
+  padding: 12px 2px;
+}
+.bill-main { display: flex; align-items: center; gap: 12px; }
+.bill-meta { flex: 1; min-width: 0; font-size: 13.5px; }
+.bill-sub {
+  display: block;
+  font-size: 10.5px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin-top: 2px;
+}
+.bill-amt {
+  font-family: var(--display);
+  font-size: 16px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.bill-stamp { transform: rotate(-2deg); }
+.bill-stamp.neg { border-color: var(--neg); color: var(--neg); }
+.bill-stamp.gold { border-color: var(--gold-2); color: var(--gold-2); }
+.bill-pay {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-top: 9px;
+  padding-left: 2px;
+}
+.bill-pay select { min-width: 230px; padding: 6px 9px; font-size: 12.5px; }
+.bill-pay input { min-width: 90px; width: 90px; text-align: right; padding: 6px 9px; }
+
+/* payroll table */
+table.payroll { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 4px; }
+table.payroll th {
+  text-align: left;
+  font-size: 9.5px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--ink-2);
+  border-bottom: 1px solid var(--ink);
+  padding: 6px 8px 4px;
+}
+table.payroll td { padding: 7px 8px; border-bottom: 1px solid var(--line-soft); }
+table.payroll th.num, table.payroll td.num { text-align: right; }
 
 /* ================================================================== toasts */
 
