@@ -20,9 +20,11 @@ mobile ledgers, no cheques.
 | **3 — Credit & storage** | fixed-cost loans, savings interest, safety deposit boxes, gold exchange | **Built** |
 | **4 — Ops & polish** | admin panel, reconciliation, money-supply dashboard, Discord audit, migration shim, heist reserve | **Built** |
 
-Not yet built: the Tax Collector's tier-2 collections tooling (queue, escort,
-lawful seizure, liens — design §5.14) and business accounts + the Tax Ledger
-(design §5.15). Both wait on the jobs and the `sovereign_stores` contract.
+The two remaining spec areas are now built as well: **collections & the Tax
+Collector** (§5.14 — queue, escort, lawful seizure, liens) and **business
+accounts + the Tax Ledger** (§5.15). Both lie dormant until their prerequisites
+exist: collections needs a `taxcollector` job in `Config.Societies`, and the Tax
+Ledger fills in when `sovereign_stores` calls `RegisterBusiness` on a purchase.
 
 ## Install
 
@@ -165,6 +167,56 @@ local ok, res = exports.sov_bank:ClaimBranchReserve('valentine', 0, {
   idem     = heistUuid,
 })
 -- res = { looted = 143000, remaining = 107000, paid = {...} }
+```
+
+### Businesses & the Tax Ledger — for `sovereign_stores`
+
+There is **no sales tax** anywhere in this suite. Business tax is a flat licence
+fee per period, sized as a percentage of the building's purchase price, owed
+whether or not the shop sells a thing.
+
+```lua
+-- On property purchase (the payment should route through the bank anyway):
+exports.sov_bank:RegisterBusiness('valentine_gunsmith', ownerCharid, 200000, {
+  name = 'Valentine Gunsmith',
+})
+-- Opens a business account, grants the owner access, and sets the tax basis.
+
+exports.sov_bank:GetBusinessAccount('valentine_gunsmith')  -- account row
+exports.sov_bank:GetTaxLedger('valentine_gunsmith')        -- assessed/remitted/owed/due
+exports.sov_bank:IsBusinessOwner(charid, 'valentine_gunsmith')
+```
+
+The scheduler assesses each period automatically and, once a balance goes
+unremitted past its window, opens a `tax` bill against the owner that enters the
+collections pipeline. Owners settle at the teller under **Business & Tax**.
+
+### Collections & seizure — for the Tax Collector and restraint scripts
+
+```lua
+exports.sov_bank:GetCollectionsQueue({ kind = 'tax', limit = 50 })
+exports.sov_bank:RecordCollection(billId, 5000, {
+  collectorCharid = collector, payWith = 'wallet',
+})
+exports.sov_bank:PlaceLien(debtorCharid, accountId, 10000, { billId = billId })
+exports.sov_bank:StartEscort(collectorCharid, debtorCharid, billId)
+
+-- GOVERNMENT DEBT ONLY — returns ERR_CIVIL_DEBT for a private invoice, always.
+exports.sov_bank:EscalateToLawman(billId, { collectorCharid = collector })
+
+-- The restraint resource calls this BEFORE allowing rope/hogtie, so force is
+-- gated on a server-verified debt rather than a player's claim:
+if exports.sov_bank:IsSeizureAuthorized(collectorCharid, debtorCharid) then
+  -- ...allow the restraint...
+end
+
+exports.sov_bank:ValuateItems({ { name = 'gold_nugget', count = 2 } })
+exports.sov_bank:SeizeAssets(collectorCharid, debtorCharid, billId, {
+  { name = 'gold_nugget', count = 2 },
+})
+-- Verifies the open tier-2 debt, caps to what is owed, skips exempt items,
+-- removes goods BEFORE paying so a failed removal can't be paid for, applies
+-- proceeds, returns surplus to the debtor's account, writes an audit row.
 ```
 
 ### Loans & gold

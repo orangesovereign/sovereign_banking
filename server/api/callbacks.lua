@@ -173,6 +173,8 @@ handlers['getTellerData'] = guarded(function(ctx)
     },
     society = societyInfo(ctx.src),
     openBills = #Billing.listOpenFor(ctx.charid),
+    businesses = #Business.listFor(ctx.charid),
+    isCollector = (Collections.isCollector(ctx.src)) == true,
     config = {
       currencies = Config.Currencies,
       maxAccounts = Config.MaxAccounts,
@@ -549,6 +551,121 @@ handlers['goldExchange'] = guarded(function(ctx, p)
   local ok, res = Gold.exchange(ctx.charid, dir, goldMinor, { source = 'sov_bank' })
   if not ok then return { ok = false, error = res } end
   return okWith(ctx, { result = res, quote = Gold.quote() })
+end)
+
+-- ============================================================================
+-- Business desk & Tax Ledger (design §5.15) — at the teller, like everything
+-- ============================================================================
+
+handlers['businesses'] = guarded(function(ctx)
+  return { ok = true, data = { rows = Business.listFor(ctx.charid) } }
+end)
+
+handlers['remitTax'] = guarded(function(ctx, p)
+  local businessId = tostring(p.businessId or '')
+  if not Business.isOwner(ctx.charid, businessId) then
+    return { ok = false, error = Err.ACCESS }
+  end
+  local payWith = p.payWith
+  if payWith ~= 'wallet' then
+    payWith = tonumber(payWith)
+    if not payWith or not Accounts.hasLevel(payWith, ctx.charid, 'withdraw') then
+      return { ok = false, error = Err.ACCESS }
+    end
+  end
+  local amount = p.amount ~= nil and parseAmount(p.amount) or nil
+  if p.amount ~= nil and not amount then return { ok = false, error = Err.BAD_AMOUNT } end
+
+  local ok, res = Business.remit(businessId, amount, ctx.charid, payWith,
+    { source = 'sov_bank' })
+  if not ok then return { ok = false, error = res } end
+  return okWith(ctx, { result = res, businesses = Business.listFor(ctx.charid) })
+end)
+
+-- ============================================================================
+-- Collections desk (design §5.14) — Tax Collectors only, re-checked per call
+-- ============================================================================
+
+local function collectorCtx(ctx)
+  local isCollector = Collections.isCollector(ctx.src)
+  if not isCollector then return false, { ok = false, error = Err.NOT_COLLECTOR } end
+  return true
+end
+
+local function queueView(rows)
+  local out = {}
+  for _, b in ipairs(rows) do
+    out[#out + 1] = {
+      id = b.id,
+      kind = b.kind,
+      status = b.status,
+      charid = b.target_charid,
+      debtor = Bridge.GetCharName(b.target_charid),
+      remaining = tonumber(b.balance_remaining) or 0,
+      daysOverdue = tonumber(b.days_overdue) or 0,
+      memo = b.memo,
+      assigned = b.assigned_collector,
+      isGovDebt = Constants.GovDebt[b.kind] == true,
+    }
+  end
+  return out
+end
+
+handlers['collectionsQueue'] = guarded(function(ctx, p)
+  local ok, errRes = collectorCtx(ctx)
+  if not ok then return errRes end
+  return { ok = true, data = {
+    rows = queueView(Collections.queue({
+      kind = type(p.kind) == 'string' and p.kind or nil,
+      mine = p.mine and ctx.charid or nil,
+      limit = 50,
+    })),
+    me = ctx.charid,
+  } }
+end)
+
+handlers['collectionsAssign'] = guarded(function(ctx, p)
+  local ok, errRes = collectorCtx(ctx)
+  if not ok then return errRes end
+  local done, res = Collections.assign(p.billId, ctx.charid)
+  if not done then return { ok = false, error = res } end
+  return { ok = true, data = { rows = queueView(Collections.queue({ limit = 50 })) } }
+end)
+
+handlers['collectionsRecord'] = guarded(function(ctx, p)
+  local ok, errRes = collectorCtx(ctx)
+  if not ok then return errRes end
+  local amount = p.amount ~= nil and parseAmount(p.amount) or nil
+  if p.amount ~= nil and not amount then return { ok = false, error = Err.BAD_AMOUNT } end
+  local done, res = Collections.record(p.billId, ctx.charid, amount,
+    p.payWith == 'wallet' and 'wallet' or tonumber(p.payWith) or 'wallet',
+    { source = 'sov_bank' })
+  if not done then return { ok = false, error = res } end
+  return { ok = true, data = {
+    result = res, rows = queueView(Collections.queue({ limit = 50 })),
+  } }
+end)
+
+handlers['collectionsEscalate'] = guarded(function(ctx, p)
+  local ok, errRes = collectorCtx(ctx)
+  if not ok then return errRes end
+  local done, res = Collections.escalate(p.billId, ctx.charid)
+  if not done then return { ok = false, error = res } end
+  return { ok = true, data = {
+    result = res, rows = queueView(Collections.queue({ limit = 50 })),
+  } }
+end)
+
+handlers['collectionsLien'] = guarded(function(ctx, p)
+  local ok, errRes = collectorCtx(ctx)
+  if not ok then return errRes end
+  local amount = parseAmount(p.amount)
+  if not amount then return { ok = false, error = Err.BAD_AMOUNT } end
+  local done, res = Collections.placeLien(tostring(p.charid or ''), nil, amount, {
+    billId = p.billId, collectorCharid = ctx.charid,
+  })
+  if not done then return { ok = false, error = res } end
+  return { ok = true, data = { result = res } }
 end)
 
 -- ============================================================================

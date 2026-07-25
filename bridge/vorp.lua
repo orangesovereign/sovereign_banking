@@ -190,6 +190,37 @@ function Bridge.RegisterStash(stashId, name, slots)
   return ok
 end
 
+--- How many of an item a character carries (0 when unknown). Used only to
+--- clamp a lawful seizure to what the debtor actually has (design §5.14).
+function Bridge.GetItemCount(src, itemName)
+  local count = 0
+  local ok = pcall(function()
+    local item = exports.vorp_inventory:getItem(tonumber(src), itemName)
+    if type(item) == 'table' then
+      count = tonumber(item.count) or tonumber(item.amount) or 0
+    elseif type(item) == 'number' then
+      count = item
+    end
+  end)
+  if not ok then
+    ok = pcall(function()
+      count = tonumber(exports.vorp_inventory:getItemCount(tonumber(src), itemName)) or 0
+    end)
+  end
+  return ok and count or 0
+end
+
+--- Remove items from a character. Returns true only when the removal applied.
+function Bridge.RemoveItem(src, itemName, count)
+  local ok = pcall(function()
+    exports.vorp_inventory:subItem(tonumber(src), itemName, tonumber(count) or 1)
+  end)
+  if not ok then
+    Log.error('could not remove %s x%s from %s', itemName, tostring(count), tostring(src))
+  end
+  return ok
+end
+
 function Bridge.OpenStash(src, stashId)
   local ok = pcall(function()
     exports.vorp_inventory:openInventory(tonumber(src), stashId)

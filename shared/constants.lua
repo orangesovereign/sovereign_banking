@@ -58,6 +58,9 @@ Constants.Category = {
   HEIST         = 'heist',
   GOLD_EXCHANGE = 'gold_exchange',
   SDB_RENT      = 'sdb_rent',
+  COLLECTION    = 'collection',      -- debt collected in the field (§5.14)
+  COMMISSION    = 'commission',      -- Tax Collector's cut
+  SEIZURE       = 'seizure',         -- proceeds of lawfully seized goods
   ADMIN_ADJUST  = 'admin_adjust',
   COMPENSATION  = 'compensation',   -- reversal of a failed two-phase op
 }
@@ -123,5 +126,12 @@ Constants.Err = {
   SDB_LIMIT          = 'ERR_SDB_LIMIT',
   NO_SDB             = 'ERR_NO_SDB',
   RENT_DUE           = 'ERR_RENT_DUE',
+  NO_BUSINESS        = 'ERR_NO_BUSINESS',
+  NOT_COLLECTOR      = 'ERR_NOT_COLLECTOR',
+  NOT_IN_COLLECTIONS = 'ERR_NOT_IN_COLLECTIONS',
+  CIVIL_DEBT         = 'ERR_CIVIL_DEBT',      -- invoices can never reach a warrant
+  SEIZURE_DENIED     = 'ERR_SEIZURE_DENIED',
+  SEIZURE_DISABLED   = 'ERR_SEIZURE_DISABLED',
+  NO_LIEN            = 'ERR_NO_LIEN',
   INTERNAL           = 'ERR_INTERNAL',
 }

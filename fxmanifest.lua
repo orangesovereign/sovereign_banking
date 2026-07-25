@@ -4,7 +4,7 @@ rdr3_warning 'I acknowledge that this is a prerelease build of RedM, and I am aw
 
 author 'Sovereign'
 description 'Sovereign Bank — central financial authority for the Sovereign suite'
-version '0.5.0'
+version '0.6.0'
 lua54 'yes'
 
 shared_scripts {
@@ -30,6 +30,9 @@ server_scripts {
   'server/modules/sdb.lua',
   'server/modules/gold.lua',
   'server/modules/heist.lua',
+  'server/modules/business.lua',
+  'server/modules/collections.lua',
+  'server/modules/seizure.lua',
   'server/admin.lua',
   'server/api/callbacks.lua',
   'server/api/exports.lua',

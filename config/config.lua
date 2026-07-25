@@ -133,13 +133,25 @@ Config.Collections = {
   collectionsAfterDays = 7,   -- real-life days overdue → tier 2 (Tax Collector)
   taxCollectorCommission = 0.10,
   liensEnabled         = true,
+  -- The Tax Collector job (§5.14 tier 2). Must match a Config.Societies entry:
+  -- commissions and collected debt flow through that society's fund.
+  collectorSociety = 'tax_office',
   seizure = {
     enabled          = true,
-    requireRestraint = true,
-    capToDebt        = true,
-    valuation        = 'store',  -- 'store' | 'table'
+    requireRestraint = true,     -- the restraint resource gates this via IsSeizureAuthorized
+    capToDebt        = true,     -- never seize more than owed + fees
+    valuation        = 'table',  -- 'table' (priceTable below) | 'store' (economy sell prices)
+    storeExport      = { resource = 'sovereign_stores', fn = 'GetSellPrice' },
     returnSurplus    = true,
-    exemptItems      = {},
+    -- Fallback per-item value in minor units when valuation can't price an item.
+    defaultItemValue = 100,
+    priceTable = {
+      -- ['gold_nugget'] = 2500, ['pocket_watch'] = 800,
+    },
+    -- Never seizable, whatever the debt (design §5.14).
+    exemptItems = {
+      'bread', 'water', 'canteen', 'consumable_medicine',
+    },
   },
   -- Tier 3 / arrestable threshold — GOVERNMENT DEBT ONLY (invoices never reach it)
   arrestable = {

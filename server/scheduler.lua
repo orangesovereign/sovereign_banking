@@ -140,6 +140,11 @@ CreateThread(function()
       Loans.sweepDefaults(50)
       Heist.replenish()      -- branch tills refill toward cap
 
+      -- Business licence tax: assess due periods, then hand unremitted
+      -- balances to collections as government debt (design §5.15).
+      Business.sweepAssessments(25)
+      Business.sweepDelinquent(25)
+
       -- Rolling reconciliation (tech spec §9.2): a slice per tick, cycling
       -- through every account so drift surfaces within a few hours.
       local slice = Admin.reconcileAll(100, reconcileOffset)

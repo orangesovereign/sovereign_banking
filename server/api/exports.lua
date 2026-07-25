@@ -253,6 +253,97 @@ function API.GetGoldQuote()
 end
 
 -- ============================================================================
+-- Business accounts & the Tax Ledger (design §6.1, §5.15) — sovereign_stores
+-- ============================================================================
+
+--- Call on property purchase: opens the business account and sets the tax
+--- basis from the building price. opts: { name, licenseRate, source }.
+function API.RegisterBusiness(business, ownerCharid, buildingPrice, opts)
+  local meta = buildMeta(opts, nil)
+  return Business.register(business, ownerCharid, buildingPrice, {
+    name = type(opts) == 'table' and opts.name or nil,
+    licenseRate = type(opts) == 'table' and opts.licenseRate or nil,
+    source = meta.source,
+  })
+end
+
+function API.GetBusinessAccount(business)
+  return Business.account(business)
+end
+
+function API.GetTaxLedger(business)
+  return Business.getLedger(business)
+end
+
+--- Assess licenseRate × building_price. NO sales tax exists in this suite.
+function API.AssessBusinessTax(business, opts)
+  local meta = buildMeta(opts, nil)
+  return Business.assess(business, { source = meta.source })
+end
+
+--- Settle business tax. payWith = accountId | 'wallet' (opts.payWith).
+function API.RemitTax(business, amount, opts)
+  local meta = buildMeta(opts, nil)
+  local o = type(opts) == 'table' and opts or {}
+  local acct = Business.account(business)
+  return Business.remit(business, amount, o.charid or Business.owner(business),
+    o.payWith or (acct and acct.id), { source = meta.source })
+end
+
+function API.IsBusinessOwner(charid, business)
+  return Business.isOwner(charid, business)
+end
+
+-- ============================================================================
+-- Collections & seizure (design §6.1, §5.14) — the Tax Collector's tools
+-- ============================================================================
+
+function API.GetCollectionsQueue(filterOpts)
+  return Collections.queue(filterOpts)
+end
+
+--- opts: { collectorCharid, payWith = 'wallet'|accountId, source }
+function API.RecordCollection(billId, amount, opts)
+  local meta = buildMeta(opts, nil)
+  local o = type(opts) == 'table' and opts or {}
+  return Collections.record(billId, o.collectorCharid, amount, o.payWith or 'wallet',
+    { source = meta.source })
+end
+
+function API.PlaceLien(targetCharid, accountId, amount, opts)
+  local o = type(opts) == 'table' and opts or {}
+  return Collections.placeLien(targetCharid, accountId, amount, {
+    billId = o.billId, collectorCharid = o.collectorCharid,
+  })
+end
+
+--- GOVERNMENT DEBT ONLY. Refuses private invoices (design §5.14 hard rule).
+function API.EscalateToLawman(billId, opts)
+  local o = type(opts) == 'table' and opts or {}
+  return Collections.escalate(billId, o.collectorCharid or 'system')
+end
+
+function API.StartEscort(collectorId, debtorId, billId)
+  return Collections.startEscort(collectorId, debtorId, billId)
+end
+
+--- Guard for the restraint resource: may this collector rope this debtor?
+function API.IsSeizureAuthorized(collectorId, debtorId)
+  return Seizure.isAuthorized(collectorId, debtorId)
+end
+
+--- Assessed sale value of a list of goods, in minor units.
+function API.ValuateItems(itemList)
+  return Seizure.valuate(itemList)
+end
+
+--- Verifies an open tier-2 debt, caps to what is owed, honors exempt items,
+--- returns surplus, and writes an audit row. See server/modules/seizure.lua.
+function API.SeizeAssets(collectorId, debtorId, billId, itemList, opts)
+  return Seizure.seize(collectorId, debtorId, billId, itemList, opts)
+end
+
+-- ============================================================================
 -- Heist / branch cash reserve (design §6.1, §5.11)
 -- ============================================================================
 -- These NEVER touch a player or society account balance. The only pool they
@@ -321,3 +412,19 @@ exports('GetGoldQuote', API.GetGoldQuote)
 exports('GetBranchReserve', API.GetBranchReserve)
 exports('ClaimBranchReserve', API.ClaimBranchReserve)
 exports('GetMoneySupply', API.GetMoneySupply)
+-- Business & Tax Ledger (sovereign_stores)
+exports('RegisterBusiness', API.RegisterBusiness)
+exports('GetBusinessAccount', API.GetBusinessAccount)
+exports('GetTaxLedger', API.GetTaxLedger)
+exports('AssessBusinessTax', API.AssessBusinessTax)
+exports('RemitTax', API.RemitTax)
+exports('IsBusinessOwner', API.IsBusinessOwner)
+-- Collections & seizure (Tax Collector)
+exports('GetCollectionsQueue', API.GetCollectionsQueue)
+exports('RecordCollection', API.RecordCollection)
+exports('PlaceLien', API.PlaceLien)
+exports('EscalateToLawman', API.EscalateToLawman)
+exports('StartEscort', API.StartEscort)
+exports('IsSeizureAuthorized', API.IsSeizureAuthorized)
+exports('ValuateItems', API.ValuateItems)
+exports('SeizeAssets', API.SeizeAssets)

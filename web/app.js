@@ -72,6 +72,13 @@ const ERR_TEXT = {
   ERR_SDB_LIMIT: 'You rent as many boxes as the vault allows.',
   ERR_NO_SDB: 'No such box in our vault.',
   ERR_RENT_DUE: 'Rent is owed on that box — settle it to regain entry.',
+  ERR_NO_BUSINESS: 'No such business on our books.',
+  ERR_NOT_COLLECTOR: 'That desk is for the Tax Office.',
+  ERR_NOT_IN_COLLECTIONS: 'That debt is not in collections.',
+  ERR_CIVIL_DEBT: 'A private debt can never become a warrant. Civil remedies only.',
+  ERR_SEIZURE_DENIED: 'No lawful grounds for seizure.',
+  ERR_SEIZURE_DISABLED: 'Seizure is not permitted on this server.',
+  ERR_NO_LIEN: 'No such lien.',
   ERR_INTERNAL: 'The clerk fumbled the paperwork. Try again.',
 };
 const errText = (code) => ERR_TEXT[code] || ERR_TEXT.ERR_INTERNAL;
@@ -297,6 +304,10 @@ function renderActions() {
       : { icon: I.safe, label: 'Safety Deposit Boxes', soon: true },
     { icon: I.bill, label: 'Pay Bills / Taxes', run: () => modalBills(), badge: openBills },
     cfg.gold ? { icon: I.goldbars, label: 'Gold Exchange', run: () => modalGold() } : null,
+    (S.data?.businesses || 0) > 0
+      ? { icon: I.papers, label: 'Business & Tax', run: () => modalBusiness() } : null,
+    S.data?.isCollector
+      ? { icon: I.key, label: 'Collections Queue', run: () => modalCollections() } : null,
     ...(S.data?.society
       ? [{ icon: I.people, label: S.data.society.name, run: () => modalSociety() }]
       : [{ icon: I.people, label: 'Society Accounts', soon: true }]),
@@ -1013,6 +1024,159 @@ function modalGold() {
   };
   $('#gx-buy').addEventListener('click', () => go('buy'));
   $('#gx-sell').addEventListener('click', () => go('sell'));
+}
+
+/* Business desk — the shop's account and its Tax Ledger, settled at the counter.
+   The licence tax is a flat fee on the building's value; there is no sales tax
+   anywhere in this suite. */
+async function modalBusiness() {
+  openModal('Business &amp; Tax Ledger', '<p class="hint">The clerk pulls the business file…</p>');
+  const res = await rpc('businesses');
+  if (!res.ok) { closeModal(); return toast(errText(res.error), 'error'); }
+  if (!modalIsOpen()) return;
+  renderBusinessBody(res.data.rows || []);
+}
+
+function renderBusinessBody(rows) {
+  $('#modal-root .modal-body').innerHTML = rows.length ? rows.map((b) => {
+    const t = b.tax;
+    const owes = t && t.owed > 0;
+    return `<div class="bill-row" data-biz="${esc(b.businessId)}">
+      <div class="bill-main">
+        <span class="badge bill-stamp ${owes ? 'neg' : ''}">${owes ? 'tax due' : 'clear'}</span>
+        <span class="bill-meta">
+          <b>${esc(b.name)}</b>
+          <span class="bill-sub">№ ${esc(b.number)} · account holds ${fmt(b.balance)}</span>
+        </span>
+        <span class="bill-amt">${t ? fmt(t.owed) : '—'}</span>
+      </div>
+      ${t ? `
+        <div class="hint" style="margin:6px 0 0 2px">
+          Licence fee: ${(t.rate * 100).toFixed(0)}% of the ${fmt(t.basis)} building price
+          = ${fmt(Math.round(t.basis * t.rate))} per period.
+          Assessed to date ${fmt(t.assessed)}, remitted ${fmt(t.remitted)}.
+          ${t.dueAt ? `Next due ${fmtEraDate(t.dueAt)}.` : ''}
+        </div>
+        ${owes ? `
+          <div class="bill-pay">
+            <select class="bz-src">
+              <option value="${b.accountId}">Business account (${fmt(b.balance)})</option>
+              <option value="wallet">Cash in hand (${fmt(S.data?.wallet?.money || 0)})</option>
+              ${(S.data?.accounts || []).filter(canWithdraw).map((a) =>
+                `<option value="${a.id}">${esc(a.name)} — ${esc(a.number)}</option>`).join('')}
+            </select>
+            <input type="text" class="bz-amt" inputmode="decimal"
+              value="${(t.owed / 100).toFixed(2)}" title="Amount to remit">
+            <button class="btn slim primary bz-go">Remit</button>
+          </div>` : ''}` : '<p class="hint">No tax ledger on file for this business.</p>'}
+    </div>`;
+  }).join('') + `<p class="hint">Unremitted licence tax becomes government debt and
+      is pursued like any other — settle it here and it stays a bookkeeping matter.</p>`
+    : '<p class="hint" style="text-align:center;padding:8px 0">You hold no business accounts.</p>';
+
+  document.querySelectorAll('.bz-go').forEach((btn) =>
+    btn.addEventListener('click', async () => {
+      const row = btn.closest('.bill-row');
+      const amount = toMinor(row.querySelector('.bz-amt').value);
+      if (!amount) return toast(errText('ERR_BAD_AMOUNT'), 'error');
+      const src = row.querySelector('.bz-src').value;
+      const res = await rpc('remitTax', {
+        businessId: row.dataset.biz,
+        payWith: src === 'wallet' ? 'wallet' : Number(src),
+        amount,
+      });
+      if (!res.ok) return toast(errText(res.error), 'error');
+      applySnapshot(res.data);
+      toast(res.data.result.balanceOwed === 0
+        ? 'Licence tax settled in full.'
+        : `Remitted ${fmt(res.data.result.remitted)} — ${fmt(res.data.result.balanceOwed)} still owed.`);
+      renderBusinessBody(res.data.businesses || []);
+      S.page = 0;
+      loadLedger();
+    }));
+}
+
+/* Collections desk — the Tax Collector's queue. Civil authority only: a
+   private invoice can be pursued but never escalated to a warrant. */
+async function modalCollections(filterMine) {
+  openModal('Collections Queue', '<p class="hint">The clerk opens the arrears book…</p>');
+  const res = await rpc('collectionsQueue', { mine: !!filterMine });
+  if (!res.ok) { closeModal(); return toast(errText(res.error), 'error'); }
+  if (!modalIsOpen()) return;
+  renderCollectionsBody(res.data.rows || [], res.data.me, !!filterMine);
+}
+
+function renderCollectionsBody(rows, me, filterMine) {
+  $('#modal-root .modal-body').innerHTML = `
+    <div class="form-row" style="margin-bottom:10px">
+      <button class="btn slim ${filterMine ? '' : 'primary'}" id="cq-all">All Arrears</button>
+      <button class="btn slim ${filterMine ? 'primary' : ''}" id="cq-mine">Assigned to Me</button>
+    </div>
+    ${rows.length ? rows.map((b) => `
+      <div class="bill-row" data-bill="${b.id}" data-charid="${esc(b.charid)}">
+        <div class="bill-main">
+          <span class="badge bill-stamp ${b.status === 'warrant' ? 'neg' : (b.isGovDebt ? 'gold' : '')}">
+            ${esc(b.status === 'warrant' ? 'warrant' : b.kind)}</span>
+          <span class="bill-meta">
+            <b>${esc(b.debtor)}</b> <span class="bill-sub" style="display:inline">#${esc(b.charid)}</span>
+            <span class="bill-sub">${esc(b.memo || '')} · ${b.daysOverdue} days overdue
+              ${b.assigned ? `· held by ${esc(b.assigned === me ? 'you' : b.assigned)}` : '· unassigned'}</span>
+          </span>
+          <span class="bill-amt">${fmt(b.remaining)}</span>
+        </div>
+        <div class="bill-pay">
+          ${b.assigned === me ? '' : '<button class="btn slim cq-claim">Claim</button>'}
+          <input type="text" class="cq-amt" inputmode="decimal"
+            value="${(b.remaining / 100).toFixed(2)}" title="Amount collected">
+          <button class="btn slim primary cq-take">Collect Cash</button>
+          ${!b.isGovDebt
+            ? '<span class="hint" style="margin:0">civil debt — never a warrant</span>'
+            : (b.status === 'warrant'
+              ? '<span class="hint" style="margin:0">warrant filed — with the law</span>'
+              : '<button class="btn slim danger cq-esc">Escalate</button>')}
+        </div>
+      </div>`).join('')
+      : '<p class="hint" style="text-align:center;padding:8px 0">The arrears book is empty. A rare and pleasant day.</p>'}
+    <p class="hint">Collect on the spot from the debtor's pocket, or walk them to a
+      counter. Force is the last resort, and only after the debt is refused —
+      seizure is authorized by the server, not by this desk.</p>`;
+
+  $('#cq-all').addEventListener('click', () => modalCollections(false));
+  $('#cq-mine').addEventListener('click', () => modalCollections(true));
+
+  const billOf = (btn) => Number(btn.closest('.bill-row').dataset.bill);
+
+  document.querySelectorAll('.cq-claim').forEach((btn) =>
+    btn.addEventListener('click', async () => {
+      const res = await rpc('collectionsAssign', { billId: billOf(btn) });
+      if (!res.ok) return toast(errText(res.error), 'error');
+      toast('Debt claimed. It is yours to work.');
+      renderCollectionsBody(res.data.rows || [], me, filterMine);
+    }));
+
+  document.querySelectorAll('.cq-take').forEach((btn) =>
+    btn.addEventListener('click', async () => {
+      const row = btn.closest('.bill-row');
+      const amount = toMinor(row.querySelector('.cq-amt').value);
+      if (!amount) return toast(errText('ERR_BAD_AMOUNT'), 'error');
+      const res = await rpc('collectionsRecord', {
+        billId: billOf(btn), amount, payWith: 'wallet',
+      });
+      if (!res.ok) return toast(errText(res.error), 'error');
+      const r = res.data.result;
+      toast(r.closed
+        ? `Debt settled in full. Your commission: ${fmt(r.commission)}.`
+        : `Took ${fmt(r.applied)} — ${fmt(r.remaining)} still owed.`);
+      renderCollectionsBody(res.data.rows || [], me, filterMine);
+    }));
+
+  document.querySelectorAll('.cq-esc').forEach((btn) =>
+    btn.addEventListener('click', async () => {
+      const res = await rpc('collectionsEscalate', { billId: billOf(btn) });
+      if (!res.ok) return toast(errText(res.error), 'error');
+      toast('Warrant filed. The law will take it from here.');
+      renderCollectionsBody(res.data.rows || [], me, filterMine);
+    }));
 }
 
 // ------------------------------------------------------------- admin panel
