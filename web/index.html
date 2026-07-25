@@ -9,23 +9,27 @@
 <body>
   <div id="app" class="hidden">
     <div class="panel">
+      <span class="corner tl">❖</span>
+      <span class="corner tr">❖</span>
+      <span class="corner bl">❖</span>
+      <span class="corner br">❖</span>
+
       <header class="masthead">
-        <div class="mast-left">
-          <h1>Sovereign Bank</h1>
-          <div id="branch-name" class="branch-name">—</div>
-        </div>
-        <div class="mast-right">
-          <div class="wallet" id="wallet-display"></div>
-          <button id="btn-close" class="close-btn" title="Leave the counter">✕</button>
-        </div>
+        <button id="btn-close" class="close-btn" title="Take your leave">✕</button>
+        <div class="wallet" id="wallet-display"></div>
+        <div class="mast-rule"><span class="rule"></span><span class="orn">❦</span><span class="rule"></span></div>
+        <h1>Sovereign&nbsp;Bank</h1>
+        <div class="mast-sub">Incorporated 1896 · Deposits Insured by the Government Fund</div>
+        <div id="branch-name" class="branch-name">—</div>
       </header>
 
       <div class="body">
         <nav class="sidenav">
+          <div class="nav-head">Index</div>
           <button class="nav-btn active" data-view="overview">Accounts</button>
           <button class="nav-btn" data-view="transfer">Wire &amp; Pay</button>
           <button class="nav-btn" data-view="open">New Account</button>
-          <div class="nav-foot">Est. 1896 · Member of the<br>Government Insurance Fund</div>
+          <div class="nav-foot">All banking is conducted<br>in person, at the counter.<br><br>— The Management</div>
         </nav>
         <main id="view" class="view"></main>
       </div>

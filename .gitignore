@@ -1,4 +1,4 @@
-.claude/settings.local.json
+.claude/
 .vscode/
 .idea/
 *.log

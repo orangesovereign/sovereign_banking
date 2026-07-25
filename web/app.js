@@ -135,8 +135,8 @@ function renderHeader() {
   $('#branch-name').textContent = S.data?.branch?.name || '';
   const w = S.data?.wallet || {};
   $('#wallet-display').innerHTML =
-    `Cash in hand<br><b>${fmt(w.money || 0)}</b>` +
-    (S.data?.config?.currencies?.gold ? ` · <b class="gold">${fmt(w.gold || 0, 'gold')}</b>` : '');
+    `<div class="w-label">Cash in hand</div><b>${fmt(w.money || 0)}</b>` +
+    (S.data?.config?.currencies?.gold ? `<br><b class="gold">${fmt(w.gold || 0, 'gold')}</b>` : '');
 }
 
 function setView(view) {
@@ -159,7 +159,7 @@ function render() {
 function renderOverview() {
   const accounts = S.data?.accounts || [];
   $('#view').innerHTML = `
-    <h2>Your Accounts</h2>
+    <h2>Register of Accounts</h2>
     <div class="acct-grid">
       ${accounts.map((a) => `
         <div class="acct-card ${a.kind}" data-open="${a.id}">
@@ -168,7 +168,7 @@ function renderOverview() {
               <span class="badge ${a.kind === 'savings' ? 'savings' : ''}">${esc(a.kind)}</span>
               ${a.isOwner ? '' : '<span class="badge shared">shared</span>'}
             </div>
-            <div class="acct-sub">${esc(a.number)} · your access: ${esc(a.access)}</div>
+            <div class="acct-sub">№ ${esc(a.number)} · access: ${esc(a.access)}</div>
           </div>
           <div class="acct-balances">
             <div class="money">${fmt(a.balances.money)}</div>
@@ -176,7 +176,7 @@ function renderOverview() {
           </div>
         </div>`).join('')}
     </div>
-    ${accounts.length === 0 ? '<p class="muted">No accounts on file. Open one at the “New Account” desk.</p>' : ''}
+    ${accounts.length === 0 ? '<p class="muted" style="text-align:center;margin-top:18px">No accounts on our books. Enquire at the “New Account” desk.</p>' : ''}
   `;
   document.querySelectorAll('[data-open]').forEach((el) =>
     el.addEventListener('click', () => {
@@ -201,9 +201,9 @@ function renderAccount() {
     <button class="backlink" id="back">← All accounts</button>
     <div class="detail-head">
       <div>
-        <div class="acct-title" style="font-size:22px">${esc(a.name)}
+        <div class="acct-title">${esc(a.name)}
           <span class="badge ${a.kind === 'savings' ? 'savings' : ''}">${esc(a.kind)}</span></div>
-        <div class="acct-sub">${esc(a.number)}</div>
+        <div class="acct-sub">№ ${esc(a.number)}</div>
       </div>
       <div class="detail-balance">
         <div class="money">${fmt(a.balances.money)}</div>
@@ -290,7 +290,7 @@ function renderStatement(body, a) {
           <tr>
             <td>${fmtDate(r.created_at)}</td>
             <td><span class="cat">${esc(r.category)}</span></td>
-            <td>${esc(r.memo || '')}</td>
+            <td class="memo-cell">${esc(r.memo || '')}</td>
             <td class="num ${r.direction === 'credit' ? 'amt-credit' : 'amt-debit'}">
               ${r.direction === 'credit' ? '+' : '−'}${fmt(r.amount, curName(r.currency))}</td>
             <td class="num">${r.balance_after != null ? fmt(r.balance_after, curName(r.currency)) : '—'}</td>
@@ -413,8 +413,8 @@ function renderTransfer() {
       <div class="field"><label>Amount</label>
         <input type="text" id="tr-amt" inputmode="decimal" placeholder="0.00"></div>
       <div class="field"><label>Memo</label>
-        <input type="text" id="tr-memo" maxlength="120" placeholder="For the cattle" style="min-width:260px"></div>
-      <button class="btn primary" id="tr-send">Send</button>
+        <input type="text" id="tr-memo" maxlength="120" placeholder="for the cattle" style="min-width:260px"></div>
+      <button class="btn primary" id="tr-send">Send by Wire</button>
     </div>
     <p class="hint" id="tr-fee">Transfers between your own accounts are free; wires to another holder carry the bank’s fee, which funds the government insurance on all deposits.</p>
     `}
@@ -466,10 +466,10 @@ function renderOpen() {
   const n = (S.data?.accounts || []).filter((a) => a.isOwner).length;
   const max = S.data?.config?.maxAccounts || 4;
   $('#view').innerHTML = `
-    <h2>Open an Account</h2>
-    <p class="hint">You hold ${n} of ${max} permitted accounts.</p>
-    <div class="form-row" style="margin-top:14px">
-      <div class="field"><label>Name</label>
+    <h2>Open a New Account</h2>
+    <p class="hint" style="text-align:center">You hold ${n} of ${max} accounts the bank permits.</p>
+    <div class="form-row" style="margin-top:18px;justify-content:center">
+      <div class="field"><label>Name of Account</label>
         <input type="text" id="op-name" maxlength="30" placeholder="Ranch Fund"></div>
       <div class="field"><label>Type</label>
         <select id="op-kind">
