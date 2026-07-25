@@ -10,15 +10,35 @@ mobile ledgers, no cheques.
 > **Folder name matters:** other scripts call `exports.sov_bank:...`, so install
 > this resource as `sov_bank` (clone/rename the folder), not `sovereign_banking`.
 
-## Status — Phase 0: Foundation ✅ (in review)
+## Status — Phase 1: Accounts & teller UX ✅ (in review)
 
 | Phase | Scope | Status |
 |-------|-------|--------|
 | **0 — Foundation** | VORP bridge, schema, money engine, ledger, idempotency, core exports | **Built** |
-| 1 — Accounts & teller UX | savings, teller NUI, statements, shared access, proximity gating | — |
+| **1 — Accounts & teller UX** | branches/blips/teller peds, teller NUI, savings & named accounts, statements, shared access, proximity gating | **Built** |
 | 2 — Society & commerce | society accounts, payroll, invoices, fines/taxes, collections | — |
 | 3 — Credit & storage | loans, savings interest, safety deposit boxes, gold exchange | — |
 | 4 — Ops & polish | admin panel, reconciliation dashboard, Discord, migration shim | — |
+
+### Phase 1 highlights
+
+- **Branches** ([locations.lua](config/locations.lua)): Valentine, Rhodes,
+  Saint Denis, Blackwater — blips, teller peds, and a hold-**[G]** prompt at the
+  counter (key configurable via `Config.Teller.promptKey`). Coordinates are
+  close approximations; fine-tune to your map.
+- **Teller NUI** (`web/`): accounts overview, deposit/withdraw, statements with
+  category filter and paging, wire & pay (own-account moves free, wires to
+  others carry the fee), open checking/savings accounts, shared-access
+  management, close-at-zero.
+- **Proximity gating**: every NUI request is re-checked server-side against the
+  branch teller position (`Config.Teller.serverSlack` of tolerance) — the
+  client's claim is never trusted. Requests are rate-limited per player.
+- **Shared access** (design §5.1): hierarchical owner → admin → withdraw →
+  deposit → read. Admins manage non-admin grants; only the owner appoints
+  admins; anyone but the owner can remove themselves.
+- **RPC layer**: client↔server calls use a self-contained request/response
+  channel (`sov_bank:rpc:*`) instead of VORP's callback API, sidestepping the
+  version-to-version callback naming differences (tech spec §16.5).
 
 Phase 0 is deliberately the integration backbone: other Sovereign scripts can
 already pay wages, charge purchases, and move bank balances through the exports

@@ -1,7 +1,7 @@
 --[[
   server/modules/accounts.lua — account lifecycle (design §5.1).
-  Phase 0 scope: auto-created primary checking accounts, system accounts,
-  lookups. Savings/joint/shared-access flows land in Phase 1.
+  Auto-created primary checking accounts, system accounts, named/savings
+  accounts, shared access by level, close-at-zero.
 ]]
 
 Accounts = {}
@@ -94,6 +94,188 @@ function Accounts.getSystem(key)
   ]], { key })
   if row then systemIds[key] = row.id end
   return row
+end
+
+-- ============================================================================
+-- Access levels (design §5.1). Strictly hierarchical; the owner row is
+-- implicit from ownership and can never be granted, changed, or revoked.
+-- ============================================================================
+
+local RANK = Constants.AccessRank
+
+--- Effective access level of charid on an account ('owner'..'read'), or nil.
+--- Accepts an account row or an id.
+function Accounts.getAccessLevel(account, charid)
+  charid = tostring(charid)
+  local acct = type(account) == 'table' and account or Accounts.getById(account)
+  if not acct then return nil end
+  if acct.owner_type == Constants.OwnerType.CHARACTER
+    and tostring(acct.owner_id) == charid then
+    return 'owner'
+  end
+  local row = Db.single(
+    'SELECT access_level FROM sov_bank_access WHERE account_id = ? AND charidentifier = ?',
+    { acct.id, charid })
+  return row and row.access_level or nil
+end
+
+--- True when charid holds `needed` level or better. Second return = level.
+function Accounts.hasLevel(account, charid, needed)
+  local level = Accounts.getAccessLevel(account, charid)
+  if not level or not RANK[needed] then return false, level end
+  return RANK[level] >= RANK[needed], level
+end
+
+--- Every non-closed account this character can see (their own + shared).
+function Accounts.listForChar(charid)
+  charid = tostring(charid)
+  return Db.query([[
+    SELECT a.*, x.access_level
+    FROM sov_bank_accounts a
+    JOIN sov_bank_access x ON x.account_id = a.id
+    WHERE x.charidentifier = ? AND a.status <> 'closed'
+    ORDER BY a.id ASC
+  ]], { charid }) or {}
+end
+
+--- Access roster for an account (management view).
+function Accounts.listAccess(accountId)
+  return Db.query([[
+    SELECT charidentifier, access_level, granted_by,
+           UNIX_TIMESTAMP(created_at) AS created_at
+    FROM sov_bank_access WHERE account_id = ?
+    ORDER BY id ASC
+  ]], { tonumber(accountId) }) or {}
+end
+
+--- Grant (or update) shared access. Rules (design §5.1):
+--- admin+ can grant; only the owner grants/overwrites 'admin'; the owner row
+--- is untouchable; grantee must be a real character.
+function Accounts.grantAccess(accountId, granterCharid, targetCharid, level)
+  granterCharid, targetCharid = tostring(granterCharid), tostring(targetCharid)
+  if not RANK[level] or level == 'owner' then return false, Constants.Err.BAD_LEVEL end
+
+  local acct = Accounts.getById(accountId)
+  if not acct then return false, Constants.Err.NO_ACCOUNT end
+  if acct.status ~= 'active' then return false, Constants.Err.FROZEN end
+  if targetCharid == granterCharid then return false, Constants.Err.ACCESS end
+  if acct.owner_type == Constants.OwnerType.CHARACTER
+    and tostring(acct.owner_id) == targetCharid then
+    return false, Constants.Err.ACCESS
+  end
+
+  local granterLevel = Accounts.getAccessLevel(acct, granterCharid)
+  if not granterLevel or RANK[granterLevel] < RANK.admin then
+    return false, Constants.Err.ACCESS
+  end
+  if level == 'admin' and granterLevel ~= 'owner' then
+    return false, Constants.Err.ACCESS
+  end
+  -- An admin may not overwrite another admin's grant — owner only.
+  local existing = Accounts.getAccessLevel(acct, targetCharid)
+  if existing == 'admin' and granterLevel ~= 'owner' then
+    return false, Constants.Err.ACCESS
+  end
+
+  if not Bridge.CharacterExists(targetCharid) then
+    return false, Constants.Err.UNKNOWN_CHAR
+  end
+
+  Db.execute([[
+    INSERT INTO sov_bank_access (account_id, charidentifier, access_level, granted_by)
+    VALUES (?, ?, ?, ?)
+    ON DUPLICATE KEY UPDATE access_level = VALUES(access_level), granted_by = VALUES(granted_by)
+  ]], { acct.id, targetCharid, level, granterCharid })
+
+  Log.info('access: %s granted %s on account %s to %s',
+    granterCharid, level, acct.account_number, targetCharid)
+  return true, { level = level }
+end
+
+--- Revoke shared access. admin+ may revoke below-admin; owner may revoke
+--- anyone; anyone (except the owner) may remove themselves.
+function Accounts.revokeAccess(accountId, granterCharid, targetCharid)
+  granterCharid, targetCharid = tostring(granterCharid), tostring(targetCharid)
+  local acct = Accounts.getById(accountId)
+  if not acct then return false, Constants.Err.NO_ACCOUNT end
+  if acct.owner_type == Constants.OwnerType.CHARACTER
+    and tostring(acct.owner_id) == targetCharid then
+    return false, Constants.Err.ACCESS -- the owner row is untouchable
+  end
+
+  local isSelf = granterCharid == targetCharid
+  if not isSelf then
+    local granterLevel = Accounts.getAccessLevel(acct, granterCharid)
+    if not granterLevel or RANK[granterLevel] < RANK.admin then
+      return false, Constants.Err.ACCESS
+    end
+    local targetLevel = Accounts.getAccessLevel(acct, targetCharid)
+    if targetLevel == 'admin' and granterLevel ~= 'owner' then
+      return false, Constants.Err.ACCESS
+    end
+  end
+
+  Db.execute('DELETE FROM sov_bank_access WHERE account_id = ? AND charidentifier = ?',
+    { acct.id, targetCharid })
+  Log.info('access: %s revoked account %s access for %s',
+    granterCharid, acct.account_number, targetCharid)
+  return true
+end
+
+-- ============================================================================
+-- Named / savings accounts & close (design §5.1)
+-- ============================================================================
+
+--- Open an additional account for a character, respecting Config.MaxAccounts.
+--- Returns (accountRow) or (nil, errCode).
+function Accounts.createNamed(charid, name, kind)
+  charid = tostring(charid)
+  if kind ~= Constants.AccountKind.CHECKING and kind ~= Constants.AccountKind.SAVINGS then
+    return nil, Constants.Err.BAD_KIND
+  end
+
+  local count = tonumber(Db.scalar([[
+    SELECT COUNT(*) FROM sov_bank_accounts
+    WHERE owner_type = 'character' AND owner_id = ? AND status <> 'closed'
+  ]], { charid })) or 0
+  if count >= (Config.MaxAccounts or 4) then
+    return nil, Constants.Err.ACCOUNT_LIMIT
+  end
+
+  name = type(name) == 'string' and name:gsub('^%s+', ''):gsub('%s+$', '') or ''
+  if #name == 0 then
+    name = kind == Constants.AccountKind.SAVINGS and 'Savings' or 'Checking'
+  end
+  name = Util.truncate(name, 30)
+
+  local acct = Accounts.create(Constants.OwnerType.CHARACTER, charid, name, kind)
+  if not acct then return nil, Constants.Err.INTERNAL end
+  return acct
+end
+
+--- Close an account: owner only, all balances zero (design §5.1). Runs under
+--- the account mutex so it can't race an in-flight movement.
+function Accounts.close(accountId, charid)
+  charid = tostring(charid)
+  accountId = tonumber(accountId)
+  if not accountId then return false, Constants.Err.NO_ACCOUNT end
+
+  return Money.withLocks({ 'acct:' .. accountId }, function()
+    local acct = Accounts.getById(accountId)
+    if not acct then return false, Constants.Err.NO_ACCOUNT end
+    if acct.status == 'closed' then return false, Constants.Err.ACCOUNT_CLOSED end
+    if Accounts.getAccessLevel(acct, charid) ~= 'owner' then
+      return false, Constants.Err.ACCESS
+    end
+    for _, col in pairs(Constants.CurrencyColumn) do
+      if (tonumber(acct[col]) or 0) ~= 0 then
+        return false, Constants.Err.NOT_EMPTY
+      end
+    end
+    Db.execute("UPDATE sov_bank_accounts SET status = 'closed' WHERE id = ?", { acct.id })
+    Log.info('account %s closed by %s', acct.account_number, charid)
+    return true, { closed = acct.id }
+  end)
 end
 
 --- Idempotent first-boot seeding (tech spec §15.4).

@@ -31,6 +31,12 @@ Constants.AccessLevel = {
   DEPOSIT = 'deposit', READ = 'read',
 }
 
+-- Access levels are strictly hierarchical (design §5.1): a higher rank can do
+-- everything a lower rank can.
+Constants.AccessRank = {
+  read = 1, deposit = 2, withdraw = 3, admin = 4, owner = 5,
+}
+
 -- Ledger categories (design §4, open set — opts.reason may add more)
 Constants.Category = {
   DEPOSIT       = 'deposit',
@@ -76,5 +82,10 @@ Constants.Err = {
   UNKNOWN_CHAR       = 'ERR_UNKNOWN_CHAR',
   NOT_AT_BRANCH      = 'ERR_NOT_AT_BRANCH',
   ACCESS             = 'ERR_ACCESS',
+  BAD_KIND           = 'ERR_BAD_KIND',
+  BAD_LEVEL          = 'ERR_BAD_LEVEL',
+  ACCOUNT_LIMIT      = 'ERR_ACCOUNT_LIMIT',
+  NOT_EMPTY          = 'ERR_NOT_EMPTY',
+  RATE_LIMITED       = 'ERR_RATE_LIMITED',
   INTERNAL           = 'ERR_INTERNAL',
 }

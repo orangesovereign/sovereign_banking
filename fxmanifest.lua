@@ -4,7 +4,7 @@ rdr3_warning 'I acknowledge that this is a prerelease build of RedM, and I am aw
 
 author 'Sovereign'
 description 'Sovereign Bank — central financial authority for the Sovereign suite'
-version '0.1.0'
+version '0.2.0'
 lua54 'yes'
 
 shared_scripts {
@@ -22,15 +22,27 @@ server_scripts {
   'server/engine/ledger.lua',
   'server/engine/money.lua',
   'server/modules/accounts.lua',
+  'server/modules/branches.lua',
+  'server/api/callbacks.lua',
   'server/api/exports.lua',
   'server/api/events.lua',
   'server/main.lua',
 }
 
--- Phase 1+ (teller UI, branches) — not yet implemented:
--- client_scripts { 'client/main.lua', 'client/teller.lua', 'client/nui.lua' }
--- ui_page 'web/index.html'
--- files { 'web/index.html', 'web/app.js', 'web/style.css' }
+client_scripts {
+  'bridge/vorp.lua',
+  'client/nui.lua',
+  'client/main.lua',
+  'client/teller.lua',
+}
+
+ui_page 'web/index.html'
+
+files {
+  'web/index.html',
+  'web/style.css',
+  'web/app.js',
+}
 
 dependencies {
   'vorp_core',

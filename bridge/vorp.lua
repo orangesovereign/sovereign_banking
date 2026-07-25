@@ -1,9 +1,10 @@
 --[[
   bridge/vorp.lua — the ONLY file that talks to VORP directly (design §9).
   Everything else calls Bridge.*; porting to RSG/standalone later means
-  rewriting this one file.
+  rewriting this one file. Loaded on both sides; each side defines only what
+  it needs.
 
-  Wallet notes:
+  Wallet notes (server):
   - VORP stores wallet currency as display floats (dollars). The bank operates
     exclusively in integer minor units ("cents"); conversion happens here and
     nowhere else.
@@ -15,8 +16,6 @@
     the wallet (tech spec §6).
 ]]
 
-if not IsDuplicityVersion() then return end -- server bridge only (Phase 0)
-
 Bridge = {}
 
 local Core
@@ -24,10 +23,31 @@ do
   local ok, core = pcall(function() return exports.vorp_core:GetCore() end)
   if ok and core then
     Core = core
-  else
+  elseif IsDuplicityVersion() then
     Log.error('FATAL: could not acquire VORP core — is vorp_core started before sov_bank?')
+  else
+    print('^1[sov_bank] could not acquire VORP core on client^7')
   end
 end
+
+-- ============================================================================
+-- CLIENT side
+-- ============================================================================
+if not IsDuplicityVersion() then
+  --- Client notification (teller feedback, errors).
+  function Bridge.Notify(msg, duration)
+    if Core and Core.NotifyRightTip then
+      local ok = pcall(function() Core.NotifyRightTip(msg, duration or 4000) end)
+      if ok then return end
+    end
+    TriggerEvent('vorp:TipRight', msg, duration or 4000)
+  end
+  return
+end
+
+-- ============================================================================
+-- SERVER side
+-- ============================================================================
 
 local CURRENCY_FIELD = { [0] = 'money', [1] = 'gold', [2] = 'rol' }
 
@@ -58,6 +78,15 @@ function Bridge.GetSourceFromCharId(charid)
     end
   end
   return nil
+end
+
+--- Does this charid exist at all (online or not)? Reads VORP's characters
+--- table — a VORP coupling, which is why it lives in the bridge.
+function Bridge.CharacterExists(charid)
+  local row = Db.scalar(
+    'SELECT charidentifier FROM characters WHERE charidentifier = ? LIMIT 1',
+    { tostring(charid) })
+  return row ~= nil
 end
 
 --- Wallet balance in minor units, or nil if the character isn't available.
@@ -113,7 +142,7 @@ function Bridge.OnCharacterSelected(fn)
   end)
 end
 
---- Phase 1+: job/whitelist checks for Tax Collector, society bosses, admins.
+--- Phase 2+: job/whitelist checks for Tax Collector, society bosses, admins.
 function Bridge.GetJob(src)
   local char = getCharacter(src)
   if not char then return nil end

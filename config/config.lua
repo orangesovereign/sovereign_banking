@@ -17,8 +17,25 @@ Config.LogLevel      = 'info'    -- debug | info | warn | error
 Config.AutoRunSchema = true      -- run sql/install.sql (idempotent) on boot
 
 -- ============================================================================
+-- Teller interaction (design §5.10 — no ATMs, staffed tellers only)
+-- ============================================================================
+Config.Teller = {
+  promptKey        = 0x760A9C6F,  -- [G] — RedM control hash for the hold-prompt
+  openRange        = 2.5,         -- metres from the teller to interact (client)
+  serverSlack      = 2.5,         -- extra metres allowed by the server-side gate
+  nearbyRange      = 30.0,        -- client switches to per-frame checks inside this
+  blipSprite       = 'blip_shop_bank',
+  blipScale        = 0.2,
+  spawnPeds        = true,        -- spawn a teller ped at each branch
+  pedSpawnDistance = 60.0,        -- spawn/despawn distance for teller peds
+}
+
+-- ============================================================================
 -- Fees (design §5.2 / §5.11 — fees fund the government insurance account)
 -- ============================================================================
+-- Teller transfers between two accounts you OWN use the sameBranch fee (free
+-- by default); sending to anyone else's account is a "wire" and uses the
+-- crossBranch fee. Collected fees credit SYS-INSURANCE (design §5.11).
 Config.Fees = {
   transferSameBranch  = { type = 'flat',    value = 0 },
   transferCrossBranch = { type = 'percent', value = 0.01 }, -- "wire" between banks
