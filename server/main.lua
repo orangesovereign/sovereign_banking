@@ -40,6 +40,13 @@ end
 CreateThread(function()
   waitForDb()
   ensureSchema()
+
+  -- Numbers 1–1000 are reserved for government accounts (Config.ReservedNumbers):
+  -- push the id counter past the range so organic accounts brand from №1001.
+  -- Safe to run every boot — MySQL never lowers the counter below the current max.
+  local floor = ((Config.ReservedNumbers and Config.ReservedNumbers.max) or 1000) + 1
+  Db.execute(('ALTER TABLE sov_bank_accounts AUTO_INCREMENT = %d'):format(floor))
+
   Accounts.ensureSystemAccounts()
 
   -- Resource restarted mid-session: make sure everyone already in has a
@@ -49,7 +56,7 @@ CreateThread(function()
     if charid then Accounts.ensurePrimary(charid) end
   end
 
-  Log.info('Sovereign Bank v%s ready — Phase 0 (money engine + exports)',
+  Log.info('Sovereign Bank v%s ready',
     GetResourceMetadata(RESOURCE, 'version', 0) or '?')
 end)
 

@@ -263,7 +263,10 @@ without a restart.
 - Personal checking account auto-created on first character load.
 - Optional **savings** account (the only interest-bearing kind — see §5.4).
 - Additional named accounts (business, joint) — configurable cap.
-- Account numbers in a branded format (`SVB-0000123`).
+- Account numbers in a branded format (`SVB-0000123`). Numbers **1–1000 are
+  reserved for government/system accounts** (`SVB-0000001` = Government Fund,
+  `SVB-0000002` = Insurance Fund; society accounts join the range in Phase 2);
+  player accounts begin at `SVB-0001001`.
 - **Shared access** by level: owner / admin / withdraw / deposit / read-only.
 - Grant/revoke access by character ID; all changes logged.
 - Freeze/close (close only at zero balance, or sweep-to-owner on close).

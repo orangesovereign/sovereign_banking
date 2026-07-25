@@ -22,7 +22,9 @@ CREATE TABLE IF NOT EXISTS sov_bank_accounts (
   UNIQUE KEY uq_account_number (account_number),
   KEY idx_owner (owner_type, owner_id),
   KEY idx_status (status)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+) ENGINE=InnoDB AUTO_INCREMENT=1001 DEFAULT CHARSET=utf8mb4;
+-- ^ ids 1-1000 (and the account numbers branded from them) are reserved for
+--   government/system accounts; organic accounts start at 1001.
 
 CREATE TABLE IF NOT EXISTS sov_bank_access (
   id             INT UNSIGNED NOT NULL AUTO_INCREMENT,

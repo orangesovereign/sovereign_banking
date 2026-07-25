@@ -13,6 +13,15 @@ Config.StoreAsCents  = true      -- all amounts are integer minor units (cents)
 Config.MaxAccounts   = 4         -- per character (enforced in Phase 1 UI flows)
 Config.AccountPrefix = 'SVB-'    -- account numbers look like SVB-0000123
 
+-- Account numbers 1–1000 are set aside for government/system accounts;
+-- player accounts begin at SVB-0001001. Named entries pin specific numbers
+-- (Phase 2 society accounts — sheriff, medical, tax office — join this list).
+Config.ReservedNumbers = {
+  max = 1000,                    -- last reserved number
+  ['SYS-GOV']       = 1,         -- Government Fund  -> SVB-0000001
+  ['SYS-INSURANCE'] = 2,         -- Insurance Fund   -> SVB-0000002
+}
+
 Config.LogLevel      = 'info'    -- debug | info | warn | error
 Config.AutoRunSchema = true      -- run sql/install.sql (idempotent) on boot
 

@@ -674,7 +674,10 @@ a manual QA checklist for NUI flows.
 3. Configure `config/config.lua` + `config/locations.lua` (branches, rates, tax,
    heist reserves).
 4. First boot seeds `SYS-INSURANCE` and `SYS-GOV` system accounts and per-branch
-   reserve rows.
+   reserve rows. Account numbers 1–1000 are reserved for government accounts
+   (`Config.ReservedNumbers`): system rows are pinned to ids/numbers inside the
+   range (`SVB-0000001` gov, `SVB-0000002` insurance) and the table's
+   AUTO_INCREMENT starts at 1001, so organic accounts brand from `SVB-0001001`.
 5. Schema versioning: a `sov_bank_meta(version)` row; `main.lua` runs ordered
    migration steps when the code version exceeds the stored version.
 

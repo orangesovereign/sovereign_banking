@@ -278,22 +278,51 @@ function Accounts.close(accountId, charid)
   end)
 end
 
---- Idempotent first-boot seeding (tech spec §15.4).
+--- Idempotent first-boot seeding (tech spec §15.4). Government/system
+--- accounts live in the reserved number range 1–1000 (Config.ReservedNumbers):
+--- their row id and account number are both pinned there, so №1 is the
+--- Government Fund and №2 the Insurance Fund for the life of the server.
 function Accounts.ensureSystemAccounts()
+  local reserved = Config.ReservedNumbers or {}
+  local prefix = Config.AccountPrefix or 'SVB-'
   local seeds = {
-    { key = Constants.SystemAccounts.INSURANCE, name = 'Insurance Fund' },
     { key = Constants.SystemAccounts.GOV,       name = 'Government Fund' },
+    { key = Constants.SystemAccounts.INSURANCE, name = 'Insurance Fund' },
   }
   for _, seed in ipairs(seeds) do
-    if not Accounts.getSystem(seed.key) then
-      local acct = Accounts.create(Constants.OwnerType.SYSTEM, seed.key, seed.name,
+    local num = reserved[seed.key]
+    local acct = Accounts.getSystem(seed.key)
+
+    if not acct and num then
+      -- Fresh install: pin id AND number to the reserved slot.
+      local number = ('%s%07d'):format(prefix, num)
+      Db.execute([[
+        INSERT IGNORE INTO sov_bank_accounts (id, account_number, owner_type, owner_id, name, kind)
+        VALUES (?, ?, 'system', ?, ?, 'checking')
+      ]], { num, number, seed.key, seed.name })
+      acct = Accounts.getSystem(seed.key)
+      if acct then Log.info('seeded system account %s as %s', seed.key, number) end
+    elseif not acct then
+      -- No reserved slot configured — fall back to an organic row.
+      acct = Accounts.create(Constants.OwnerType.SYSTEM, seed.key, seed.name,
         Constants.AccountKind.CHECKING)
-      if acct then
-        -- Brand system accounts by their role, not a numeric id.
-        Db.execute('UPDATE sov_bank_accounts SET account_number = ? WHERE id = ?',
-          { 'SVB-' .. seed.key, acct.id })
-        systemIds[seed.key] = acct.id
+    elseif num then
+      -- Migration: installs seeded before the range was reserved carry a
+      -- role-branded number (SVB-SYS-GOV). Rebrand to the numeric slot.
+      local wanted = ('%s%07d'):format(prefix, num)
+      if acct.account_number ~= wanted then
+        local clash = Accounts.getByNumber(wanted)
+        if clash and clash.id ~= acct.id then
+          Log.error('cannot brand %s as %s: number already held by account id %s',
+            seed.key, wanted, tostring(clash.id))
+        else
+          Db.execute('UPDATE sov_bank_accounts SET account_number = ? WHERE id = ?',
+            { wanted, acct.id })
+          Log.info('rebranded system account %s as %s', seed.key, wanted)
+        end
       end
     end
+
+    if not acct then Log.error('failed to seed system account %s', seed.key) end
   end
 end
