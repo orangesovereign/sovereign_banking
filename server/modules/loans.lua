@@ -119,6 +119,12 @@ function Loans.approve(loanId, approver)
     end
     Log.info('loan #%d approved by %s, %s disbursed to account %d',
       loan.id, tostring(approver), loan.principal, loan.account_id)
+    Log.discord('loans', ('Loan #%d approved'):format(loan.id), nil, {
+      { name = 'Borrower', value = tostring(loan.charidentifier), inline = true },
+      { name = 'Principal', value = Util.formatAmount(tonumber(loan.principal), 0), inline = true },
+      { name = 'Total due', value = Util.formatAmount(tonumber(loan.total_due), 0), inline = true },
+      { name = 'By', value = tostring(approver), inline = true },
+    })
     return true, { loanId = loan.id, disbursed = tonumber(loan.principal), dueBy = dueEpoch }
   end)
 end
@@ -212,6 +218,10 @@ function Loans.sweepDefaults(limit)
       Db.execute('UPDATE sov_bank_loans SET status = \'defaulted\' WHERE id = ?', { loan.id })
       Log.warn('loan #%d DEFAULTED (%s still owes %s)',
         loan.id, loan.charidentifier, loan.balance_remaining)
+      Log.discord('loans', ('Loan #%d defaulted'):format(loan.id), nil, {
+        { name = 'Borrower', value = tostring(loan.charidentifier), inline = true },
+        { name = 'Outstanding', value = Util.formatAmount(tonumber(loan.balance_remaining), 0), inline = true },
+      })
       Events.loanDefaulted({ charid = loan.charidentifier, loanId = loan.id,
         remaining = tonumber(loan.balance_remaining) })
       return true

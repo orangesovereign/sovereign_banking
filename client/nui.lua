@@ -50,5 +50,6 @@ end)
 
 RegisterNUICallback('close', function(_, cb)
   TellerClose()
+  AdminClose()
   cb({ ok = true })
 end)

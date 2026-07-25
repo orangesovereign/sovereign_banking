@@ -545,11 +545,18 @@ player's server-side coords and rejects (`ERR_NOT_AT_BRANCH`) if not within
 
 ### 8.7 Branch heist (design §5.11)
 - Heist script (owns the action) → `ClaimBranchReserve(branchId, 0, opts)`.
-- Engine: read `sov_bank_reserves`, compute `looted = reserve × rand(payoutRange)`
+- Engine: read `sov_bank_reserves`, compute `looted = reserve × opts.fraction`
   (payout randomization varies per call via server RNG in the heist script, passed
-  in `opts`), cap to reserve, decrement reserve, credit looters' wallets, ledger
-  `heist` against branch system account. Player accounts are never queried or
+  in `opts` and clamped to `payoutRange`), cap to reserve, decrement reserve under
+  a `reserve:<branch>` mutex with a `balance >= looted` guard, credit looters'
+  wallets, write a `heist` ledger row. Player accounts are never queried or
   touched. Scheduler refills reserve toward `cap` on `replenishRealHrs`.
+- **Implementation note:** the heist ledger row is written with `account_id NULL`
+  (like wallet-only ops) with the branch named in `memo`, rather than against a
+  per-branch system *account*. The reserve is a separate pool from the accounts
+  table, so keeping these rows off every account keeps `Ledger.reconcile` (§5.6)
+  exact — and makes "a robbery cannot touch a player balance" structurally true
+  rather than merely enforced.
 
 ---
 

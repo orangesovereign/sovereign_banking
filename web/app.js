@@ -10,6 +10,7 @@ const PAGE_SIZE = 8;
 
 const S = {
   open: false,
+  mode: 'teller',    // 'teller' | 'admin'
   data: null,        // { accounts, wallet, branch, config }
   sel: null,         // selected account id
   page: 0,
@@ -1014,6 +1015,225 @@ function modalGold() {
   $('#gx-sell').addEventListener('click', () => go('sell'));
 }
 
+// ------------------------------------------------------------- admin panel
+
+const A = { data: null, accounts: [] };
+
+function renderAdminSupply() {
+  const s = A.data?.supply;
+  if (!s) return;
+  const flows = (s.flows || []).slice(0, 8);
+  const peak = Math.max(1, ...flows.map((f) => Math.max(+f.credited || 0, +f.debited || 0)));
+
+  $('#admin-supply').innerHTML = `
+    <div class="stat-block">
+      <div class="stat-row"><span class="s-label">Total banked</span>
+        <span class="s-value">${fmt(s.banked.money)}</span></div>
+      ${s.banked.gold ? `<div class="stat-row"><span class="s-label">Gold on deposit</span>
+        <span class="s-value">${fmt(s.banked.gold, 'gold')}</span></div>` : ''}
+      <div class="stat-row"><span class="s-label">Open accounts</span>
+        <span class="s-value">${s.banked.accounts}</span></div>
+      <div class="stat-row"><span class="s-label">Loans outstanding</span>
+        <span class="s-value">${fmt(s.loans.outstanding)}</span></div>
+      <div class="stat-row"><span class="s-label">Unpaid debt</span>
+        <span class="s-value">${fmt(s.debt.owed)}</span></div>
+    </div>
+
+    <div class="stat-head">Public Funds</div>
+    ${(s.system || []).map((sys) => `
+      <div class="stat-row"><span class="s-label">${esc(sys.key.replace('SYS-', ''))}</span>
+        <span class="s-value">${fmt(sys.money)}</span></div>`).join('')}
+
+    <div class="stat-head">Holdings by Type</div>
+    ${(s.byOwner || []).map((o) => `
+      <div class="stat-row"><span class="s-label">${esc(o.owner_type)} (${o.n})</span>
+        <span class="s-value">${fmt(o.money)}</span></div>`).join('')}
+
+    <div class="stat-head">Faucets &amp; Sinks · ${s.windowDays} days</div>
+    ${flows.map((f) => `
+      <div style="padding:7px 2px;border-bottom:1px solid var(--line-soft)">
+        <div class="stat-row" style="border:none;padding:0">
+          <span class="s-label">${esc(f.category)}</span>
+          <span class="s-value" style="font-size:12px">
+            <span class="amt-pos">+${fmt(f.credited)}</span>
+            <span class="amt-neg">−${fmt(f.debited)}</span></span>
+        </div>
+        <div class="flow-bar">
+          <span class="in" style="width:${(+f.credited / peak) * 50}%"></span>
+          <span class="out" style="width:${(+f.debited / peak) * 50}%"></span>
+        </div>
+      </div>`).join('')}`;
+}
+
+function renderAdminAccounts() {
+  const rows = A.accounts;
+  $('#admin-accounts').innerHTML = rows.length ? `
+    <table class="admin-accts">
+      <thead><tr><th>Number</th><th>Name</th><th>Owner</th><th>Status</th>
+        <th class="num">Balance</th><th></th></tr></thead>
+      <tbody>
+        ${rows.map((a) => `
+          <tr data-acct="${a.id}">
+            <td>${esc(a.number)}</td>
+            <td>${esc(a.name)}<div class="bill-sub">${esc(a.kind)}</div></td>
+            <td>${esc(a.ownerType)}<div class="bill-sub">${esc(a.ownerId)}</div></td>
+            <td class="st-${esc(a.status)}">${esc(a.status)}</td>
+            <td class="num">${fmt(a.balances.money)}
+              ${a.balances.gold ? `<div class="bill-sub">${fmt(a.balances.gold, 'gold')}</div>` : ''}</td>
+            <td style="white-space:nowrap;text-align:right">
+              ${a.status !== 'closed' ? `
+                <button class="btn slim adm-freeze">${a.status === 'frozen' ? 'Thaw' : 'Freeze'}</button>
+                <button class="btn slim adm-adjust">Adjust</button>` : ''}
+            </td>
+          </tr>`).join('')}
+      </tbody>
+    </table>`
+    : '<p class="hint" style="text-align:center;padding:24px 0">No accounts match that search.</p>';
+
+  document.querySelectorAll('.adm-freeze').forEach((btn) =>
+    btn.addEventListener('click', async () => {
+      const id = Number(btn.closest('tr').dataset.acct);
+      const acct = rows.find((a) => a.id === id);
+      const res = await rpc('adminSetStatus', {
+        accountId: id, status: acct.status === 'frozen' ? 'active' : 'frozen',
+      });
+      if (!res.ok) return toast(errText(res.error), 'error');
+      acct.status = res.data.result.status;
+      toast(`Account ${acct.number} is now ${acct.status}.`);
+      renderAdminAccounts();
+    }));
+
+  document.querySelectorAll('.adm-adjust').forEach((btn) =>
+    btn.addEventListener('click', () => {
+      const id = Number(btn.closest('tr').dataset.acct);
+      modalAdjust(rows.find((a) => a.id === id));
+    }));
+}
+
+function modalAdjust(acct) {
+  if (!acct) return;
+  openModal(`Adjust ${esc(acct.number)}`, `
+    <p class="hint">${esc(acct.name)} — currently ${fmt(acct.balances.money)}.
+      Adjustments are written to the ledger as <b>admin_adjust</b> naming you.</p>
+    <div class="form-row" style="margin-top:14px">
+      <div class="field"><label>Amount</label>
+        <input type="text" id="adj-amt" inputmode="decimal" placeholder="0.00"></div>
+      <div class="field"><label>Currency</label>
+        <select id="adj-cur"><option value="0">Dollars</option><option value="1">Gold</option></select></div>
+      <button class="btn primary" id="adj-add">Credit</button>
+      <button class="btn danger" id="adj-sub">Debit</button>
+    </div>
+    <div class="form-row">
+      <div class="field" style="flex:1"><label>Reason (recorded)</label>
+        <input type="text" id="adj-why" maxlength="80" placeholder="restitution for lost wages" style="width:100%"></div>
+    </div>`);
+
+  const go = async (sign) => {
+    const amount = toMinor($('#adj-amt').value);
+    if (!amount) return toast(errText('ERR_BAD_AMOUNT'), 'error');
+    const res = await rpc('adminAdjust', {
+      accountId: acct.id,
+      currency: Number($('#adj-cur').value),
+      delta: sign * amount,
+      reason: $('#adj-why').value.trim() || null,
+    });
+    if (!res.ok) return toast(errText(res.error), 'error');
+    closeModal();
+    toast(`Ledger adjusted by ${sign < 0 ? '−' : '+'}${fmt(amount)}.`);
+    adminSearch($('#adm-search').value);
+  };
+  $('#adj-add').addEventListener('click', () => go(1));
+  $('#adj-sub').addEventListener('click', () => go(-1));
+}
+
+function renderAdminLoans() {
+  const rows = A.data?.pendingLoans || [];
+  $('#admin-loans').innerHTML = rows.length ? rows.map((l) => `
+    <div class="access-row" data-loan="${l.id}" style="align-items:flex-start">
+      <span>
+        <b>${esc(l.name || l.charid)}</b>
+        <div class="bill-sub">asks ${fmt(l.principal)} · owes ${fmt(l.totalDue)}</div>
+      </span>
+      <span style="white-space:nowrap">
+        <button class="btn slim primary adm-loan-ok">Approve</button>
+        <button class="btn slim danger adm-loan-no">Deny</button>
+      </span>
+    </div>`).join('')
+    : '<p class="hint">No applications awaiting a decision.</p>';
+
+  const decide = async (btn, decision) => {
+    const loanId = Number(btn.closest('[data-loan]').dataset.loan);
+    const res = await rpc('adminLoanDecision', { loanId, decision });
+    if (!res.ok) return toast(errText(res.error), 'error');
+    A.data.pendingLoans = res.data.pendingLoans || [];
+    toast(decision === 'approve' ? 'Approved and disbursed.' : 'Application denied.');
+    renderAdminLoans();
+  };
+  document.querySelectorAll('.adm-loan-ok').forEach((b) =>
+    b.addEventListener('click', () => decide(b, 'approve')));
+  document.querySelectorAll('.adm-loan-no').forEach((b) =>
+    b.addEventListener('click', () => decide(b, 'deny')));
+}
+
+function renderAdminReserves() {
+  const rows = A.data?.supply?.reserves || [];
+  $('#admin-reserves').innerHTML = rows.length ? rows.map((r) => {
+    const pct = Math.max(0, Math.min(100, (+r.balance / Math.max(1, +r.cap)) * 100));
+    return `<div class="reserve-row" style="flex-direction:column;align-items:stretch">
+      <div style="display:flex;justify-content:space-between">
+        <span>${esc(r.branch_id)}</span>
+        <b>${fmt(r.balance)} <span class="bill-sub" style="display:inline">/ ${fmt(r.cap)}</span></b>
+      </div>
+      <div class="reserve-meter"><span style="width:${pct}%"></span></div>
+    </div>`;
+  }).join('')
+    : '<p class="hint">No branch tills on record.</p>';
+}
+
+async function adminSearch(term) {
+  const res = await rpc('adminSearch', { term: term || '' });
+  if (!res.ok) return toast(errText(res.error), 'error');
+  A.accounts = res.data.rows || [];
+  renderAdminAccounts();
+}
+
+function renderAdminQuick() {
+  const rows = [
+    { icon: I.papers, label: 'Reconcile', run: async () => {
+      toast('Auditing the books…');
+      const res = await rpc('adminReconcile', { limit: 200 });
+      if (!res.ok) return toast(errText(res.error), 'error');
+      const d = res.data.drifted || [];
+      toast(d.length
+        ? `${d.length} of ${res.data.checked} accounts show drift — see the server console.`
+        : `All ${res.data.checked} accounts reconcile exactly.`,
+        d.length ? 'error' : 'success');
+    } },
+    { icon: I.columns, label: 'Refresh', run: async () => {
+      const res = await rpc('adminData');
+      if (!res.ok) return toast(errText(res.error), 'error');
+      A.data = res.data;
+      renderAdminSupply();
+      renderAdminLoans();
+      renderAdminReserves();
+      toast('Figures brought up to date.');
+    } },
+  ];
+  $('#admin-quick').innerHTML = rows.map((r, i) => `
+    <button class="qa-btn" data-i="${i}">${r.icon()}<span>${r.label}</span></button>`).join('');
+  document.querySelectorAll('#admin-quick .qa-btn').forEach((el) =>
+    el.addEventListener('click', () => rows[Number(el.dataset.i)].run()));
+}
+
+function renderAdmin() {
+  $('#admin-actor').textContent = `Clerk ${A.data?.actor || '—'}`;
+  renderAdminSupply();
+  renderAdminLoans();
+  renderAdminReserves();
+  renderAdminQuick();
+  adminSearch('');
+}
+
 // ----------------------------------------------------------------- plumbing
 
 function renderAll() {
@@ -1043,15 +1263,33 @@ window.addEventListener('message', (e) => {
   if (action === 'open') {
     S.data = data;
     S.open = true;
+    S.mode = 'teller';
     S.page = 0;
     S.filter = '';
+    $('#teller-panel').classList.remove('hidden');
+    $('#admin-panel').classList.add('hidden');
     $('#app').classList.remove('hidden');
     renderAll();
+  } else if (action === 'openAdmin') {
+    A.data = data;
+    A.accounts = [];
+    S.open = true;
+    S.mode = 'admin';
+    $('#teller-panel').classList.add('hidden');
+    $('#admin-panel').classList.remove('hidden');
+    $('#app').classList.remove('hidden');
+    renderAdmin();
   } else if (action === 'close') {
     S.open = false;
     closeModal();
     $('#app').classList.add('hidden');
   }
+});
+
+$('#admin-close').addEventListener('click', () => post('close'));
+$('#adm-search-go').addEventListener('click', () => adminSearch($('#adm-search').value));
+$('#adm-search').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') adminSearch(e.target.value);
 });
 
 window.addEventListener('keydown', (e) => {

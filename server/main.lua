@@ -49,6 +49,7 @@ CreateThread(function()
 
   Accounts.ensureSystemAccounts()
   Society.ensureAccounts()
+  Heist.ensureReserves()
   SDB.registerAll()
 
   -- Resource restarted mid-session: make sure everyone already in has a

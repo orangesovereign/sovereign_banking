@@ -233,8 +233,21 @@ local function commitLegs(legs)
 end
 
 local function announceLegs(legs)
+  local mirrorFloor = tonumber(Config.Discord and Config.Discord.txMinAmount) or 0
   for _, leg in ipairs(legs) do
     local charid = leg.acct.owner_type == 'character' and tostring(leg.acct.owner_id) or nil
+
+    -- Audit mirror for notable movements only (tech spec §12).
+    if mirrorFloor > 0 and math.abs(leg.delta) >= mirrorFloor then
+      Log.discord('tx', ('%s %s'):format(
+        leg.delta >= 0 and 'Credit' or 'Debit',
+        Util.formatAmount(math.abs(leg.delta), leg.currency)), leg.memo, {
+        { name = 'Account', value = tostring(leg.acct.account_number or leg.acct.id), inline = true },
+        { name = 'Category', value = tostring(leg.category or 'adjust'), inline = true },
+        { name = 'Balance after', value = Util.formatAmount(leg.newBal, leg.currency), inline = true },
+      })
+    end
+
     Events.transactionCompleted({
       charid = charid,
       accountId = leg.acct.id,

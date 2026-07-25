@@ -89,6 +89,20 @@ local function guarded(fn)
   end
 end
 
+--- Admin handlers are gated by PERMISSION rather than proximity: the
+--- /bankadmin panel is an ops tool, not a teller service, so it works away
+--- from a branch — but every call re-checks the ACE/allow-list server-side.
+local function adminGuarded(fn)
+  return function(src, payload)
+    if not Admin.isAllowed(src) then
+      Log.warn('unauthorized admin rpc from %s', tostring(src))
+      return { ok = false, error = Err.ACCESS }
+    end
+    local charid = Bridge.GetCharId(src) or ('src:' .. tostring(src))
+    return fn({ src = src, charid = charid, actor = charid }, payload)
+  end
+end
+
 --- Amounts from the NUI arrive as integer minor units; never trust them.
 local function parseAmount(v)
   local n = tonumber(v)
@@ -535,6 +549,89 @@ handlers['goldExchange'] = guarded(function(ctx, p)
   local ok, res = Gold.exchange(ctx.charid, dir, goldMinor, { source = 'sov_bank' })
   if not ok then return { ok = false, error = res } end
   return okWith(ctx, { result = res, quote = Gold.quote() })
+end)
+
+-- ============================================================================
+-- Admin panel (design §5.12) — permission-gated, works away from a branch
+-- ============================================================================
+
+local function adminAccountView(a)
+  return {
+    id = a.id,
+    number = a.account_number,
+    name = a.name,
+    kind = a.kind,
+    ownerType = a.owner_type,
+    ownerId = a.owner_id,
+    status = a.status,
+    balances = {
+      money = tonumber(a.balance_money) or 0,
+      gold = tonumber(a.balance_gold) or 0,
+    },
+  }
+end
+
+handlers['adminData'] = adminGuarded(function(ctx)
+  local pending = {}
+  for _, l in ipairs(Loans.listPending()) do
+    pending[#pending + 1] = {
+      id = l.id,
+      charid = l.charidentifier,
+      name = Bridge.GetCharName(l.charidentifier),
+      principal = tonumber(l.principal) or 0,
+      totalDue = tonumber(l.total_due) or 0,
+    }
+  end
+  return { ok = true, data = {
+    isAdmin = true,
+    actor = ctx.charid,
+    supply = Admin.moneySupply(7),
+    pendingLoans = pending,
+  } }
+end)
+
+handlers['adminSearch'] = adminGuarded(function(_, p)
+  local rows = {}
+  for _, a in ipairs(Admin.searchAccounts(p.term, 25)) do
+    rows[#rows + 1] = adminAccountView(a)
+  end
+  return { ok = true, data = { rows = rows } }
+end)
+
+handlers['adminSetStatus'] = adminGuarded(function(ctx, p)
+  local ok, res = Admin.setStatus(p.accountId, p.status, ctx.actor)
+  if not ok then return { ok = false, error = res } end
+  return { ok = true, data = { result = res } }
+end)
+
+handlers['adminAdjust'] = adminGuarded(function(ctx, p)
+  local delta = math.floor(tonumber(p.delta) or 0)
+  if delta == 0 then return { ok = false, error = Err.BAD_AMOUNT } end
+  local ok, res = Admin.adjust(p.accountId, tonumber(p.currency) or 0, delta,
+    ctx.actor, p.reason)
+  if not ok then return { ok = false, error = res } end
+  return { ok = true, data = { result = res } }
+end)
+
+handlers['adminReconcile'] = adminGuarded(function(_, p)
+  return { ok = true, data = Admin.reconcileAll(tonumber(p.limit) or 200, 0) }
+end)
+
+handlers['adminLoanDecision'] = adminGuarded(function(ctx, p)
+  local ok, res = (p.decision == 'approve')
+    and Loans.approve(p.loanId, ctx.actor)
+    or Loans.deny(p.loanId, ctx.actor)
+  if not ok then return { ok = false, error = res } end
+  local pending = {}
+  for _, l in ipairs(Loans.listPending()) do
+    pending[#pending + 1] = {
+      id = l.id, charid = l.charidentifier,
+      name = Bridge.GetCharName(l.charidentifier),
+      principal = tonumber(l.principal) or 0,
+      totalDue = tonumber(l.total_due) or 0,
+    }
+  end
+  return { ok = true, data = { result = res, pendingLoans = pending } }
 end)
 
 handlers['societyPayroll'] = guarded(function(ctx, p)

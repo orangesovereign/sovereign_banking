@@ -262,6 +262,7 @@ html, body {
   text-transform: uppercase;
   color: var(--ink-2);
 }
+.ledger-filters input[type="text"] { min-width: 260px; }
 
 select {
   font-family: var(--serif);
@@ -600,6 +601,79 @@ input[type="text"]:focus { outline: 1px solid var(--gold); }
   vertical-align: 1px;
 }
 .badge.owner { border-color: var(--gold-2); color: var(--gold-2); }
+
+/* ==================================================================== admin */
+
+.stat-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 8px 2px;
+  border-bottom: 1px solid var(--line-soft);
+  font-size: 13px;
+}
+.stat-row .s-label { color: var(--ink-2); }
+.stat-row .s-value {
+  font-family: var(--display);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.stat-block { margin-bottom: 18px; }
+.stat-head {
+  font-size: 10px;
+  letter-spacing: 2.5px;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin: 14px 0 4px;
+}
+
+.flow-bar {
+  height: 5px;
+  background: var(--line-soft);
+  margin-top: 4px;
+  display: flex;
+  overflow: hidden;
+}
+.flow-bar .in { background: var(--pos); }
+.flow-bar .out { background: var(--neg); }
+
+table.admin-accts { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+table.admin-accts thead th {
+  background: var(--dark);
+  color: #e8e0ca;
+  font-size: 10px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  font-weight: 400;
+  text-align: left;
+  padding: 9px 10px;
+}
+table.admin-accts td {
+  padding: 9px 10px;
+  border-bottom: 1px solid var(--line-soft);
+  vertical-align: middle;
+}
+table.admin-accts td.num { text-align: right; font-family: var(--display); font-variant-numeric: tabular-nums; }
+table.admin-accts tbody tr:hover { background: rgba(255, 252, 240, 0.55); }
+.st-active { color: var(--pos); }
+.st-frozen { color: var(--sys); }
+.st-closed { color: var(--ink-3); }
+
+.reserve-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 9px 2px;
+  border-bottom: 1px solid var(--line-soft);
+  font-size: 12.5px;
+}
+.reserve-meter {
+  height: 4px;
+  background: var(--line-soft);
+  margin-top: 5px;
+  width: 100%;
+}
+.reserve-meter span { display: block; height: 100%; background: var(--gold-2); }
 
 /* ==================================================================== bills */
 

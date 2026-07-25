@@ -21,6 +21,7 @@
 
 local DAY = 86400
 local SLICE = 100 -- bills per transition per sweep
+local reconcileOffset = 0
 
 local function lateFeeFor(amount)
   local cfg = (Config.Collections or {}).lateFee
@@ -137,6 +138,12 @@ CreateThread(function()
       end
       Savings.sweep(50)      -- interest for accounts nobody has touched
       Loans.sweepDefaults(50)
+      Heist.replenish()      -- branch tills refill toward cap
+
+      -- Rolling reconciliation (tech spec §9.2): a slice per tick, cycling
+      -- through every account so drift surfaces within a few hours.
+      local slice = Admin.reconcileAll(100, reconcileOffset)
+      reconcileOffset = (slice.checked or 0) < 100 and 0 or (reconcileOffset + 100)
     end)
     if not ok then Log.error('scheduler sweep crashed: %s', tostring(err)) end
     Wait(math.floor((Config.Scheduler.sweepMinutes or 15) * 60000))

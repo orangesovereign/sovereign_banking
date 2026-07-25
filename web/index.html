@@ -8,7 +8,7 @@
 </head>
 <body>
   <div id="app" class="hidden">
-    <div class="panel">
+    <div class="panel" id="teller-panel">
 
       <header class="masthead">
         <div class="brand">
@@ -84,6 +84,64 @@
         <button class="exit" id="btn-close"><span class="keycap">ESC</span><span>Exit</span></button>
       </footer>
 
+    </div>
+
+    <div class="panel hidden" id="admin-panel">
+      <header class="masthead">
+        <div class="brand">
+          <svg class="monogram" viewBox="0 0 64 76" aria-hidden="true">
+            <path d="M32 3 v9 M27.5 7.5 h9" stroke="#8a6d2f" stroke-width="1.6" fill="none"/>
+            <text x="26" y="55" font-family="Georgia, serif" font-size="52" fill="#b3903f" text-anchor="middle">S</text>
+            <text x="40" y="63" font-family="Georgia, serif" font-size="52" fill="#8a6d2f" text-anchor="middle">B</text>
+          </svg>
+          <div class="brand-rule"></div>
+          <div class="brand-text">
+            <h1>Ledger Office</h1>
+            <div class="est">
+              <svg class="est-arrow" viewBox="0 0 90 8"><path d="M0 4 H82 M82 4 l-7 -3.2 M82 4 l-7 3.2" stroke="currentColor" stroke-width="1" fill="none"/></svg>
+              <span>Administration</span>
+              <svg class="est-arrow flip" viewBox="0 0 90 8"><path d="M0 4 H82 M82 4 l-7 -3.2 M82 4 l-7 3.2" stroke="currentColor" stroke-width="1" fill="none"/></svg>
+            </div>
+            <div class="motto" id="admin-actor">—</div>
+          </div>
+        </div>
+      </header>
+
+      <div class="main">
+        <aside class="col col-left">
+          <div class="col-head boxed">Money Supply</div>
+          <div id="admin-supply"></div>
+        </aside>
+
+        <section class="col col-center">
+          <h2>Accounts</h2>
+          <svg class="orn center-orn" viewBox="0 0 120 10"><path d="M5 5 H50 M70 5 H115" stroke="currentColor" stroke-width="1"/><path d="M60 1.5 L64 5 L60 8.5 L56 5 Z" fill="currentColor"/></svg>
+          <div class="ledger-filters">
+            <div class="lf-left">
+              <label for="adm-search">Search:</label>
+              <input type="text" id="adm-search" placeholder="number, owner id, or name">
+            </div>
+            <button class="btn slim" id="adm-search-go">Look Up</button>
+          </div>
+          <div id="admin-accounts"></div>
+        </section>
+
+        <aside class="col col-right">
+          <div class="col-head">Loan Applications</div>
+          <div id="admin-loans"></div>
+          <div class="col-head spaced">Branch Reserves</div>
+          <div id="admin-reserves"></div>
+        </aside>
+      </div>
+
+      <footer class="quickbar">
+        <div class="qa-label">
+          <span>Operations</span>
+          <svg class="orn gold" viewBox="0 0 120 10"><path d="M5 5 H50 M70 5 H115" stroke="currentColor" stroke-width="1"/><path d="M60 1.5 L64 5 L60 8.5 L56 5 Z" fill="currentColor"/></svg>
+        </div>
+        <div class="quick-actions" id="admin-quick"></div>
+        <button class="exit" id="admin-close"><span class="keycap">ESC</span><span>Exit</span></button>
+      </footer>
     </div>
 
     <div id="modal-root" class="hidden"></div>

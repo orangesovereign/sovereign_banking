@@ -200,7 +200,35 @@ Config.BusinessTax = {
 }
 
 -- ============================================================================
+-- Admin (design §5.12) — who may open /bankadmin and force adjustments.
+-- Grant the ACE in server.cfg:  add_ace group.admin sovbank.admin allow
+-- Or list raw identifiers (license:xxxx / steam:xxxx) as a fallback.
+-- ============================================================================
+Config.Admin = {
+  aceGroup    = 'sovbank.admin',
+  identifiers = {},
+  adjustMax   = 10000000,  -- cents; ceiling on a single force adjustment
+}
+
+-- ============================================================================
+-- Migration shim (design §6.5) — mirror common VORP money signatures so
+-- third-party scripts route through the bank without being rewritten.
+-- Off by default: enable only if you know which resources need it.
+-- ============================================================================
+Config.Compat = {
+  enabled = false,
+  target  = 'wallet',  -- where legacy addMoney/removeMoney land
+}
+
+-- ============================================================================
 -- Integrations
 -- ============================================================================
-Config.Discord = { enabled = false, webhooks = { tx = '', loans = '', admin = '' } }
+-- Discord audit mirroring (tech spec §12). Categories: tx (large movements),
+-- loans, admin, heist. Payloads are batched to respect rate limits.
+Config.Discord = {
+  enabled = false,
+  webhooks = { tx = '', loans = '', admin = '', heist = '' },
+  txMinAmount = 100000,   -- cents; only mirror movements at least this large
+  flushSeconds = 10,
+}
 Config.Notify  = 'vorp'

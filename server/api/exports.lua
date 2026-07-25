@@ -253,12 +253,35 @@ function API.GetGoldQuote()
 end
 
 -- ============================================================================
+-- Heist / branch cash reserve (design §6.1, §5.11)
+-- ============================================================================
+-- These NEVER touch a player or society account balance. The only pool they
+-- read or move is the branch's physical cash reserve.
+
+--- Cash on hand at a branch, in minor units. nil for an unknown branch.
+function API.GetBranchReserve(branchId, currency)
+  return Heist.getReserve(branchId, currency or Constants.Currency.MONEY)
+end
+
+--- Collect a branch's till (called by the heist/robbery resource).
+--- opts: { fraction | amount, looters = charid|{charid,...}, idem, source }
+--- Returns (ok, {looted, remaining, paid}) — auto-caps to what is on hand.
+function API.ClaimBranchReserve(branchId, currency, opts)
+  return Heist.claim(branchId, currency or Constants.Currency.MONEY, opts)
+end
+
+-- ============================================================================
 -- Ops
 -- ============================================================================
 
 --- Ledger-vs-balance reconciliation report for one account (tech spec §5.6).
 function API.Reconcile(accountId)
   return Ledger.reconcile(accountId)
+end
+
+--- Money-supply telemetry over a window of real-life days (design §5.12).
+function API.GetMoneySupply(windowDays)
+  return Admin.moneySupply(windowDays)
 end
 
 -- ============================================================================
@@ -294,3 +317,7 @@ exports('ApproveLoan', API.ApproveLoan)
 exports('DenyLoan', API.DenyLoan)
 exports('GetLoans', API.GetLoans)
 exports('GetGoldQuote', API.GetGoldQuote)
+-- Phase 4: heist reserve & ops
+exports('GetBranchReserve', API.GetBranchReserve)
+exports('ClaimBranchReserve', API.ClaimBranchReserve)
+exports('GetMoneySupply', API.GetMoneySupply)
