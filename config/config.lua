@@ -163,6 +163,33 @@ Config.Loans = {
 }
 
 -- ============================================================================
+-- Gold exchange (design §5.6) — the assayer's counter at the bank.
+-- pricePerGold is money-minor per 1.00 gold; the spread (Config.Fees.
+-- goldExchangeSpread) is added when buying gold and subtracted when selling.
+-- ============================================================================
+Config.Gold = {
+  enabled      = true,
+  pricePerGold = 2000,   -- $20.00 per 1.00 gold (before spread)
+}
+
+-- ============================================================================
+-- Safety deposit boxes (design §5.5) — rented physical vault boxes, backed by
+-- vorp_inventory stashes. Rent is per real-life period from Config.Fees.sdbRent;
+-- past rent_paid_until + graceDays the box locks until rent is paid.
+-- ============================================================================
+Config.SDB = {
+  enabled            = true,
+  maxPerChar         = 2,
+  rentPeriodRealDays = 7,
+  graceDays          = 3,
+  sizes = {
+    small  = { slots = 10 },
+    medium = { slots = 25 },
+    large  = { slots = 50 },
+  },
+}
+
+-- ============================================================================
 -- Business tax (design §5.15) — NO sales tax; flat license fee per period
 -- ============================================================================
 Config.BusinessTax = {

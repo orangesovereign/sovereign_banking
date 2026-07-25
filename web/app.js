@@ -64,6 +64,13 @@ const ERR_TEXT = {
   ERR_NO_BILL: 'No such bill on our books.',
   ERR_BILL_CLOSED: 'That bill is already settled.',
   ERR_PAYROLL_EMPTY: 'No hands were marked for pay.',
+  ERR_LOANS_DISABLED: 'The bank is not lending at present.',
+  ERR_LOAN_LIMIT: 'You already carry as much debt as the bank allows.',
+  ERR_NO_LOAN: 'No such loan on our books.',
+  ERR_LOAN_CLOSED: 'That loan is not open.',
+  ERR_SDB_LIMIT: 'You rent as many boxes as the vault allows.',
+  ERR_NO_SDB: 'No such box in our vault.',
+  ERR_RENT_DUE: 'Rent is owed on that box — settle it to regain entry.',
   ERR_INTERNAL: 'The clerk fumbled the paperwork. Try again.',
 };
 const errText = (code) => ERR_TEXT[code] || ERR_TEXT.ERR_INTERNAL;
@@ -91,6 +98,12 @@ function fmtLedgerDate(epoch) {
   const md = d.toLocaleString('en-US', { month: 'short', day: 'numeric' });
   const t = d.toLocaleString('en-US', { hour: '2-digit', minute: '2-digit' });
   return `${md}, ${d.getFullYear() - 130} - ${t}`;
+}
+
+function fmtEraDate(epoch) {
+  if (!epoch) return '—';
+  const d = new Date(epoch * 1000);
+  return `${d.toLocaleString('en-US', { month: 'short', day: 'numeric' })}, ${d.getFullYear() - 130}`;
 }
 
 function esc(s) {
@@ -146,6 +159,7 @@ const I = {
   key: (cls = '') => `<svg class="${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="12" r="4.2"/><circle cx="8" cy="12" r="1.4"/><path d="M12.2 12 H20.6 M17.6 12 v3 M20.6 12 v2.2"/></svg>`,
   plus: (cls = '') => `<svg class="${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16"/><path d="M12 8.6 v6.8 M8.6 12 h6.8"/></svg>`,
   chev: (cls = '') => `<svg class="${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5.5 L15.5 12 L9 18.5"/></svg>`,
+  goldbars: (cls = '') => `<svg class="${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 13.6 h5.6 l1.6 4.6 H2.4 Z"/><path d="M13.4 13.6 h5.6 l1.6 4.6 h-8.8 Z"/><path d="M8.8 7.4 h5.6 l1.6 4.6 H7.2 Z"/><path d="M10.2 9.6 h3.2" stroke-width="0.8"/><path d="M5.6 15.8 h2.6 M15 15.8 h2.6" stroke-width="0.8"/></svg>`,
   branchArt: (cls = '') => `<svg class="${cls}" viewBox="0 0 150 96" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round">
     <path d="M75 8 L34 30 H116 Z"/><path d="M75 13 L44 28.6 H106 Z" stroke-width="0.8"/><circle cx="75" cy="23.5" r="2.6" stroke-width="0.8"/>
     <path d="M37 30 V34 H113 V30"/>
@@ -271,17 +285,23 @@ function selectAccount(id) {
 
 function renderActions() {
   const openBills = S.data?.openBills || 0;
+  const cfg = S.data?.config || {};
   const rows = [
     { icon: I.transfer, label: 'Transfer Funds', run: () => modalTransfer() },
-    { icon: I.columns, label: 'Request Loan', soon: true },
-    { icon: I.safe, label: 'Safety Deposit Boxes', soon: true },
+    cfg.loans?.enabled
+      ? { icon: I.columns, label: 'Request Loan', run: () => modalLoans() }
+      : { icon: I.columns, label: 'Request Loan', soon: true },
+    cfg.sdb
+      ? { icon: I.safe, label: 'Safety Deposit Boxes', run: () => modalSDB() }
+      : { icon: I.safe, label: 'Safety Deposit Boxes', soon: true },
     { icon: I.bill, label: 'Pay Bills / Taxes', run: () => modalBills(), badge: openBills },
+    cfg.gold ? { icon: I.goldbars, label: 'Gold Exchange', run: () => modalGold() } : null,
     ...(S.data?.society
       ? [{ icon: I.people, label: S.data.society.name, run: () => modalSociety() }]
       : [{ icon: I.people, label: 'Society Accounts', soon: true }]),
     { icon: I.plus, label: 'Open New Account', run: () => modalOpenAccount() },
     { icon: I.key, label: 'Account Access', run: () => modalAccess() },
-  ];
+  ].filter(Boolean);
   $('#actions').innerHTML = rows.map((r, i) => `
     <button class="action-row ${r.soon ? 'soon' : ''}" data-i="${i}">
       <span class="a-icon">${r.icon()}</span>
@@ -314,13 +334,18 @@ function renderBranch() {
 // ---------------------------------------------------------------- quickbar
 
 function renderQuickActions() {
+  const cfg = S.data?.config || {};
   const rows = [
     { icon: I.bag, label: 'Deposit', run: () => modalMove('deposit') },
     { icon: I.cash, label: 'Withdraw', run: () => modalMove('withdraw') },
     { icon: I.transfer, label: 'Transfer', run: () => modalTransfer() },
     { icon: I.bill, label: 'Pay Bill / Tax', run: () => modalBills() },
-    { icon: I.papers, label: 'View Loans', soon: true },
-    { icon: I.safe, label: 'SDB Access', soon: true },
+    cfg.loans?.enabled
+      ? { icon: I.papers, label: 'View Loans', run: () => modalLoans() }
+      : { icon: I.papers, label: 'View Loans', soon: true },
+    cfg.sdb
+      ? { icon: I.safe, label: 'SDB Access', run: () => modalSDB() }
+      : { icon: I.safe, label: 'SDB Access', soon: true },
   ];
   $('#quick-actions').innerHTML = rows.map((r, i) => `
     <button class="qa-btn ${r.soon ? 'soon' : ''}" data-i="${i}">
@@ -764,6 +789,229 @@ function renderSocietyBody(d) {
     loadLedger();
     refresh();
   });
+}
+
+/* Loans — fixed-cost: the whole obligation is known before signing. */
+const LOAN_STAMP = { pending: 'gold', active: '', defaulted: 'neg', paid: '', denied: 'neg' };
+
+function paySourcesHtml() {
+  return [
+    { v: 'wallet', label: `Cash in hand (${fmt(S.data?.wallet?.money || 0)})` },
+    ...(S.data?.accounts || []).filter(canWithdraw).map((a) =>
+      ({ v: a.id, label: `${a.name} — ${a.number} (${fmt(a.balances.money)})` })),
+  ].map((s) => `<option value="${s.v}">${esc(s.label)}</option>`).join('');
+}
+
+async function modalLoans() {
+  const cfg = S.data?.config?.loans;
+  if (!cfg?.enabled) return toast(errText('ERR_LOANS_DISABLED'), 'error');
+  openModal('Loans', '<p class="hint">The clerk opens the loan book…</p>');
+  const res = await rpc('loans');
+  if (!res.ok) { closeModal(); return toast(errText(res.error), 'error'); }
+  if (!modalIsOpen()) return;
+  renderLoansBody(res.data.rows || []);
+}
+
+function renderLoansBody(rows) {
+  const cfg = S.data.config.loans;
+  const ownAccounts = (S.data.accounts || []).filter((a) => a.isOwner);
+  const hasOpen = rows.some((l) => l.status === 'pending' || l.status === 'active');
+
+  $('#modal-root .modal-body').innerHTML = `
+    ${rows.length ? rows.map((l) => `
+      <div class="bill-row" data-loan="${l.id}">
+        <div class="bill-main">
+          <span class="badge bill-stamp ${LOAN_STAMP[l.status] || ''}">${esc(l.status)}</span>
+          <span class="bill-meta">
+            <b>Loan №${l.id}</b> — borrowed ${fmt(l.principal)}, owes ${fmt(l.totalDue)}
+            <span class="bill-sub">${l.dueBy ? `due ${fmtEraDate(l.dueBy)} · ` : ''}filed ${fmtEraDate(l.createdAt)}</span>
+          </span>
+          <span class="bill-amt">${fmt(l.remaining)}</span>
+        </div>
+        ${(l.status === 'active' || l.status === 'defaulted') ? `
+          <div class="bill-pay">
+            <select class="lp-src">${paySourcesHtml()}</select>
+            <input type="text" class="lp-amt" inputmode="decimal"
+              value="${((l.remaining || 0) / 100).toFixed(2)}" title="Amount to repay">
+            <button class="btn slim primary lp-go">Repay</button>
+          </div>` : ''}
+      </div>`).join('')
+      : '<p class="hint" style="text-align:center;padding:8px 0">No loans on your page of the book.</p>'}
+
+    ${hasOpen ? '' : `
+      <div class="col-head" style="margin-top:16px">Apply for a Loan</div>
+      <div class="form-row" style="margin-top:10px">
+        <div class="field"><label>Principal (max ${fmt(cfg.maxPrincipal)})</label>
+          <input type="text" id="ln-amt" inputmode="decimal" placeholder="0.00"></div>
+        <div class="field"><label>Paid into</label>
+          <select id="ln-acct">${ownAccounts.map((a) =>
+            `<option value="${a.id}">${esc(a.name)} — ${esc(a.number)}</option>`).join('')}</select></div>
+        <button class="btn primary" id="ln-go">Apply</button>
+      </div>
+      <p class="hint" id="ln-preview">The bank charges ${(cfg.rate * 100).toFixed(0)}% at origination —
+        no further interest accrues.${cfg.termDays > 0 ? ` Repayment is due within ${cfg.termDays} real days.` : ''}</p>`}`;
+
+  document.querySelectorAll('.lp-go').forEach((btn) =>
+    btn.addEventListener('click', async () => {
+      const row = btn.closest('.bill-row');
+      const amount = toMinor(row.querySelector('.lp-amt').value);
+      if (!amount) return toast(errText('ERR_BAD_AMOUNT'), 'error');
+      const src = row.querySelector('.lp-src').value;
+      const res = await rpc('repayLoan', {
+        loanId: Number(row.dataset.loan),
+        payWith: src === 'wallet' ? 'wallet' : Number(src),
+        amount,
+      });
+      if (!res.ok) return toast(errText(res.error), 'error');
+      applySnapshot(res.data);
+      toast(res.data.result.closed
+        ? 'Loan settled in full. The clerk closes the entry with a flourish.'
+        : `Repaid ${fmt(res.data.result.applied)} — ${fmt(res.data.result.remaining)} remains.`);
+      renderLoansBody(res.data.loans || []);
+      S.page = 0;
+      loadLedger();
+    }));
+
+  const amtEl = $('#ln-amt');
+  if (amtEl) {
+    amtEl.addEventListener('input', () => {
+      const p = toMinor(amtEl.value);
+      if (p) {
+        const total = p + Math.round(p * cfg.rate);
+        $('#ln-preview').textContent =
+          `Borrow ${fmt(p)}, owe ${fmt(total)} — the bank's ${(cfg.rate * 100).toFixed(0)}% is fixed at signing.`
+          + (cfg.termDays > 0 ? ` Due within ${cfg.termDays} real days of approval.` : '');
+      }
+    });
+    $('#ln-go').addEventListener('click', async () => {
+      const amount = toMinor(amtEl.value);
+      if (!amount) return toast(errText('ERR_BAD_AMOUNT'), 'error');
+      const res = await rpc('applyLoan', { amount, accountId: Number($('#ln-acct').value) });
+      if (!res.ok) return toast(errText(res.error), 'error');
+      applySnapshot(res.data);
+      toast(res.data.result.status === 'active'
+        ? `Approved on the spot — ${fmt(amount)} credited.`
+        : 'Application filed. The bank will consider it.');
+      renderLoansBody(res.data.loans || []);
+      S.page = 0;
+      loadLedger();
+    });
+  }
+}
+
+/* Safety deposit boxes — rented drawers in the branch vault. */
+async function modalSDB() {
+  const cfg = S.data?.config?.sdb;
+  if (!cfg) return toast('The clerk apologizes — the vault is not letting boxes at present.', 'error');
+  openModal('Safety Deposit Boxes', '<p class="hint">The clerk fetches the vault register…</p>');
+  const res = await rpc('sdbList');
+  if (!res.ok) { closeModal(); return toast(errText(res.error), 'error'); }
+  if (!modalIsOpen()) return;
+  renderSdbBody(res.data.rows || []);
+}
+
+function renderSdbBody(rows) {
+  const cfg = S.data.config.sdb;
+  const sizes = Object.keys(cfg.sizes || {});
+  const canRentMore = rows.length < (cfg.maxPerChar || 2);
+
+  $('#modal-root .modal-body').innerHTML = `
+    ${rows.length ? rows.map((b) => `
+      <div class="bill-row" data-box="${b.id}">
+        <div class="bill-main">
+          <span class="badge bill-stamp ${b.locked ? 'neg' : ''}">${b.locked ? 'rent due' : esc(b.size)}</span>
+          <span class="bill-meta">
+            <b>Box №${b.id}</b>
+            <span class="bill-sub">rent paid through ${fmtEraDate(b.paidUntil)}</span>
+          </span>
+          <span style="display:flex;gap:8px">
+            <button class="btn slim sdb-rent">Pay Rent (${fmt((cfg.rent || {})[b.size] || 0)})</button>
+            <button class="btn slim primary sdb-open" ${b.locked ? 'disabled' : ''}>Open</button>
+          </span>
+        </div>
+      </div>`).join('')
+      : '<p class="hint" style="text-align:center;padding:8px 0">You rent no boxes with us.</p>'}
+
+    ${canRentMore ? `
+      <div class="col-head" style="margin-top:16px">Rent a Box</div>
+      <div class="form-row" style="margin-top:10px">
+        <div class="field"><label>Size</label>
+          <select id="sdb-size">${sizes.map((s) =>
+            `<option value="${s}">${s[0].toUpperCase() + s.slice(1)} — ${cfg.sizes[s].slots} slots,
+             ${fmt((cfg.rent || {})[s] || 0)} / ${cfg.periodDays} days</option>`).join('')}</select></div>
+        <button class="btn primary" id="sdb-new">Rent</button>
+      </div>
+      <p class="hint">Rent is paid from your cash in hand. A box left behind on
+        rent locks until it is settled.</p>`
+      : `<p class="hint" style="margin-top:12px">The vault allows at most ${cfg.maxPerChar} boxes per customer.</p>`}`;
+
+  document.querySelectorAll('.sdb-open').forEach((btn) =>
+    btn.addEventListener('click', async () => {
+      const boxId = Number(btn.closest('.bill-row').dataset.box);
+      const res = await rpc('sdbOpen', { boxId });
+      if (!res.ok) return toast(errText(res.error), 'error');
+      // The vault drawer opens as the teller UI closes.
+      post('close');
+    }));
+  document.querySelectorAll('.sdb-rent').forEach((btn) =>
+    btn.addEventListener('click', async () => {
+      const boxId = Number(btn.closest('.bill-row').dataset.box);
+      const res = await rpc('sdbPayRent', { boxId });
+      if (!res.ok) return toast(errText(res.error), 'error');
+      applySnapshot(res.data);
+      toast('Rent recorded. The vault keeps your secrets a while longer.');
+      renderSdbBody(res.data.boxes || []);
+    }));
+  $('#sdb-new')?.addEventListener('click', async () => {
+    const res = await rpc('sdbRent', { size: $('#sdb-size').value });
+    if (!res.ok) return toast(errText(res.error), 'error');
+    applySnapshot(res.data);
+    toast('Box rented. The clerk hands over a small brass key.');
+    renderSdbBody(res.data.boxes || []);
+  });
+}
+
+/* Gold exchange — the assayer's counter. */
+function modalGold() {
+  const q = S.data?.config?.gold;
+  if (!q) return toast('The assayer is away from the counter.', 'error');
+
+  openModal('Gold Exchange', `
+    <p class="hint" style="margin-bottom:4px">The bank <b>sells</b> gold at ${fmt(q.buy)}
+      and <b>buys</b> at ${fmt(q.sell)}, per 1.00 gold.</p>
+    <div class="form-row" style="margin-top:12px">
+      <div class="field"><label>Gold amount</label>
+        <input type="text" id="gx-amt" inputmode="decimal" placeholder="0.00"></div>
+      <button class="btn primary" id="gx-buy">Buy Gold</button>
+      <button class="btn" id="gx-sell">Sell Gold</button>
+    </div>
+    <p class="hint" id="gx-line">Enter an amount to see the assayer's figures.</p>`);
+
+  const line = () => {
+    const g = toMinor($('#gx-amt').value);
+    if (!g) return;
+    const q2 = S.data.config.gold;
+    $('#gx-line').textContent =
+      `${(g / 100).toFixed(2)} gold: costs ${fmt(Math.round(g * q2.buy / 100))} to buy · ` +
+      `fetches ${fmt(Math.round(g * q2.sell / 100))} sold.`;
+  };
+  $('#gx-amt').addEventListener('input', line);
+
+  const go = async (direction) => {
+    const gold = toMinor($('#gx-amt').value);
+    if (!gold) return toast(errText('ERR_BAD_AMOUNT'), 'error');
+    const res = await rpc('goldExchange', { direction, gold });
+    if (!res.ok) return toast(errText(res.error), 'error');
+    if (res.data.quote) S.data.config.gold = res.data.quote;
+    applySnapshot(res.data);
+    const r = res.data.result;
+    toast(direction === 'buy'
+      ? `Bought ${(r.gold / 100).toFixed(2)} gold for ${fmt(r.money)}.`
+      : `Sold ${(r.gold / 100).toFixed(2)} gold for ${fmt(r.money)}.`);
+    line();
+  };
+  $('#gx-buy').addEventListener('click', () => go('buy'));
+  $('#gx-sell').addEventListener('click', () => go('sell'));
 }
 
 // ----------------------------------------------------------------- plumbing

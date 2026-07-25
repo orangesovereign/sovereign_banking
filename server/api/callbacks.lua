@@ -148,6 +148,7 @@ end
 
 handlers['getTellerData'] = guarded(function(ctx)
   Accounts.ensurePrimary(ctx.charid)
+  Savings.accrueForChar(ctx.charid) -- lazy interest posting (design §5.4)
   return okWith(ctx, {
     branch = {
       id = ctx.branch.id,
@@ -166,6 +167,20 @@ handlers['getTellerData'] = guarded(function(ctx)
         cross = Config.Fees.transferCrossBranch,
       },
       savingsAPR = Config.Interest.savingsAPR,
+      loans = {
+        enabled = Config.Loans.enabled ~= false,
+        rate = Config.Loans.originationRate,
+        maxPrincipal = Config.Loans.maxPrincipal,
+        termDays = Config.Loans.defaultTermRealDays,
+      },
+      gold = Config.Gold and Config.Gold.enabled and Config.Currencies.gold
+        and Gold.quote() or nil,
+      sdb = Config.SDB and Config.SDB.enabled and {
+        rent = Config.Fees.sdbRent,
+        periodDays = Config.SDB.rentPeriodRealDays,
+        maxPerChar = Config.SDB.maxPerChar,
+        sizes = Config.SDB.sizes,
+      } or nil,
     },
   })
 end)
@@ -411,6 +426,115 @@ handlers['societyWithdraw'] = guarded(function(ctx, p)
   })
   if not ok then return { ok = false, error = res } end
   return okWith(ctx, { result = res })
+end)
+
+-- ============================================================================
+-- Loans (design §5.3 — apply, view, repay; approval via console/admin)
+-- ============================================================================
+
+local function loanView(l)
+  return {
+    id = l.id,
+    principal = tonumber(l.principal) or 0,
+    totalDue = tonumber(l.total_due) or 0,
+    remaining = tonumber(l.balance_remaining) or 0,
+    status = l.status,
+    dueBy = tonumber(l.due_epoch),
+    createdAt = tonumber(l.created_epoch),
+  }
+end
+
+handlers['loans'] = guarded(function(ctx)
+  local rows = {}
+  for _, l in ipairs(Loans.listFor(ctx.charid)) do
+    rows[#rows + 1] = loanView(l)
+  end
+  return { ok = true, data = { rows = rows } }
+end)
+
+handlers['applyLoan'] = guarded(function(ctx, p)
+  local amount = parseAmount(p.amount)
+  if not amount then return { ok = false, error = Err.BAD_AMOUNT } end
+  local accountId = tonumber(p.accountId)
+  -- Disbursement target must be an account the borrower OWNS.
+  if accountId and Accounts.getAccessLevel(accountId, ctx.charid) ~= 'owner' then
+    return { ok = false, error = Err.ACCESS }
+  end
+  local ok, res = Loans.create(ctx.charid, amount, nil, accountId, { source = 'sov_bank' })
+  if not ok then return { ok = false, error = res } end
+  local rows = {}
+  for _, l in ipairs(Loans.listFor(ctx.charid)) do rows[#rows + 1] = loanView(l) end
+  return okWith(ctx, { result = res, loans = rows })
+end)
+
+handlers['repayLoan'] = guarded(function(ctx, p)
+  local payWith = p.payWith
+  if payWith ~= 'wallet' then
+    payWith = tonumber(payWith)
+    if not payWith or not Accounts.hasLevel(payWith, ctx.charid, 'withdraw') then
+      return { ok = false, error = Err.ACCESS }
+    end
+  end
+  local amount = p.amount ~= nil and parseAmount(p.amount) or nil
+  if p.amount ~= nil and not amount then return { ok = false, error = Err.BAD_AMOUNT } end
+  local ok, res = Loans.repay(p.loanId, ctx.charid, payWith, amount, { source = 'sov_bank' })
+  if not ok then return { ok = false, error = res } end
+  local rows = {}
+  for _, l in ipairs(Loans.listFor(ctx.charid)) do rows[#rows + 1] = loanView(l) end
+  return okWith(ctx, { result = res, loans = rows })
+end)
+
+-- ============================================================================
+-- Safety deposit boxes (design §5.5)
+-- ============================================================================
+
+local function sdbRows(charid)
+  local rows = {}
+  for _, b in ipairs(SDB.listFor(charid)) do
+    rows[#rows + 1] = {
+      id = b.id,
+      size = b.size,
+      paidUntil = tonumber(b.paid_epoch),
+      locked = not SDB.canOpen(b),
+    }
+  end
+  return rows
+end
+
+handlers['sdbList'] = guarded(function(ctx)
+  return { ok = true, data = { rows = sdbRows(ctx.charid) } }
+end)
+
+handlers['sdbRent'] = guarded(function(ctx, p)
+  local ok, res = SDB.rentNew(ctx.charid, tostring(p.size or ''), { source = 'sov_bank' })
+  if not ok then return { ok = false, error = res } end
+  return okWith(ctx, { result = res, boxes = sdbRows(ctx.charid) })
+end)
+
+handlers['sdbPayRent'] = guarded(function(ctx, p)
+  local ok, res = SDB.payRent(p.boxId, ctx.charid, { source = 'sov_bank' })
+  if not ok then return { ok = false, error = res } end
+  return okWith(ctx, { result = res, boxes = sdbRows(ctx.charid) })
+end)
+
+handlers['sdbOpen'] = guarded(function(ctx, p)
+  -- The client closes the teller UI on success; the stash opens right after.
+  local ok, res = SDB.open(p.boxId, ctx.charid, ctx.src)
+  if not ok then return { ok = false, error = res } end
+  return { ok = true, data = { openStash = true } }
+end)
+
+-- ============================================================================
+-- Gold exchange (design §5.6)
+-- ============================================================================
+
+handlers['goldExchange'] = guarded(function(ctx, p)
+  local goldMinor = parseAmount(p.gold)
+  if not goldMinor then return { ok = false, error = Err.BAD_AMOUNT } end
+  local dir = p.direction == 'sell' and 'sell' or 'buy'
+  local ok, res = Gold.exchange(ctx.charid, dir, goldMinor, { source = 'sov_bank' })
+  if not ok then return { ok = false, error = res } end
+  return okWith(ctx, { result = res, quote = Gold.quote() })
 end)
 
 handlers['societyPayroll'] = guarded(function(ctx, p)

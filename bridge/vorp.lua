@@ -159,6 +159,47 @@ function Bridge.GetCharName(charid)
   return (('%s %s'):format(row.firstname or '', row.lastname or '')):gsub('^%s+', ''):gsub('%s+$', '')
 end
 
+-- ============================================================================
+-- vorp_inventory stashes (design §5.5 safety deposit boxes). API shape varies
+-- between vorp_inventory versions, so try the modern table form first and
+-- fall back to the older positional form.
+-- ============================================================================
+
+function Bridge.RegisterStash(stashId, name, slots)
+  local ok = pcall(function()
+    exports.vorp_inventory:registerInventory({
+      id = stashId,
+      name = name,
+      limit = slots,
+      acceptWeapons = true,
+      shared = false,
+      ignoreItemStackLimit = false,
+      whitelistItems = false,
+      UsePermissions = false,
+      UseBlackList = false,
+      whitelistWeapons = false,
+    })
+  end)
+  if ok then return true end
+  ok = pcall(function()
+    exports.vorp_inventory:registerInventory(stashId, name, slots)
+  end)
+  if not ok then
+    Log.error('could not register stash %s — check vorp_inventory version', stashId)
+  end
+  return ok
+end
+
+function Bridge.OpenStash(src, stashId)
+  local ok = pcall(function()
+    exports.vorp_inventory:openInventory(tonumber(src), stashId)
+  end)
+  if not ok then
+    Log.error('could not open stash %s for %s', stashId, tostring(src))
+  end
+  return ok
+end
+
 --- Roster for a society (design §5.8 payroll): every character holding one of
 --- the given VORP job names. Offline characters included — payroll pays into
 --- bank accounts, not wallets.

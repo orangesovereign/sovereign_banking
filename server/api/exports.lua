@@ -224,6 +224,35 @@ function API.GetDebtStatus(charid)
 end
 
 -- ============================================================================
+-- Loans (design §6.1) & gold
+-- ============================================================================
+
+--- Loan application. rate nil → Config.Loans.originationRate. opts.accountId
+--- targets a specific disbursement account (defaults to the primary).
+function API.CreateLoan(charid, principal, rate, opts)
+  local meta = buildMeta(opts, Constants.Category.LOAN_DISBURSE)
+  return Loans.create(charid, principal, rate,
+    type(opts) == 'table' and opts.accountId or nil, { source = meta.source })
+end
+
+function API.ApproveLoan(loanId, approver)
+  return Loans.approve(loanId, approver or 'export')
+end
+
+function API.DenyLoan(loanId, approver)
+  return Loans.deny(loanId, approver or 'export')
+end
+
+function API.GetLoans(charid)
+  return Loans.listFor(charid)
+end
+
+--- Current assayer quotes: { buy, sell } in money-minor per 1.00 gold.
+function API.GetGoldQuote()
+  return Gold.quote()
+end
+
+-- ============================================================================
 -- Ops
 -- ============================================================================
 
@@ -259,3 +288,9 @@ exports('LevyTax', API.LevyTax)
 exports('PayBill', API.PayBill)
 exports('CancelBill', API.CancelBill)
 exports('GetDebtStatus', API.GetDebtStatus)
+-- Phase 3: loans & gold
+exports('CreateLoan', API.CreateLoan)
+exports('ApproveLoan', API.ApproveLoan)
+exports('DenyLoan', API.DenyLoan)
+exports('GetLoans', API.GetLoans)
+exports('GetGoldQuote', API.GetGoldQuote)

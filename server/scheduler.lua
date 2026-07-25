@@ -1,9 +1,9 @@
 --[[
   server/scheduler.lua — timed jobs (tech spec §9).
 
-  Phase 2 scope: the delinquency sweep (design §5.14 tiers 0→1→2, and the
-  tier-3 warrant for government debt). Savings interest, loan defaults, and
-  reserve refills join this loop in Phase 3.
+  Delinquency sweep (design §5.14 tiers 0→1→2, and the tier-3 warrant for
+  government debt), savings-interest backstop, and loan defaults. Branch
+  reserve refills join in Phase 4 with the heist surface.
 
   All timers run on real-life time (os.time epoch). Every transition takes
   the per-bill mutex so a sweep can never interleave with a payment, and each
@@ -135,6 +135,8 @@ CreateThread(function()
       if a + b + c > 0 then
         Log.info('delinquency sweep: %d overdue, %d to collections, %d warrants', a, b, c)
       end
+      Savings.sweep(50)      -- interest for accounts nobody has touched
+      Loans.sweepDefaults(50)
     end)
     if not ok then Log.error('scheduler sweep crashed: %s', tostring(err)) end
     Wait(math.floor((Config.Scheduler.sweepMinutes or 15) * 60000))

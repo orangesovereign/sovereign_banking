@@ -56,8 +56,15 @@ Constants.Category = {
   LOAN_REPAY    = 'loan_repay',
   INTEREST      = 'interest',
   HEIST         = 'heist',
+  GOLD_EXCHANGE = 'gold_exchange',
+  SDB_RENT      = 'sdb_rent',
   ADMIN_ADJUST  = 'admin_adjust',
   COMPENSATION  = 'compensation',   -- reversal of a failed two-phase op
+}
+
+Constants.LoanStatus = {
+  PENDING = 'pending', ACTIVE = 'active', PAID = 'paid',
+  DEFAULTED = 'defaulted', DENIED = 'denied',
 }
 
 -- Reserved system account owner_ids (design §5.11)
@@ -109,5 +116,12 @@ Constants.Err = {
   NO_BILL            = 'ERR_NO_BILL',
   BILL_CLOSED        = 'ERR_BILL_CLOSED',
   PAYROLL_EMPTY      = 'ERR_PAYROLL_EMPTY',
+  LOANS_DISABLED     = 'ERR_LOANS_DISABLED',
+  LOAN_LIMIT         = 'ERR_LOAN_LIMIT',
+  NO_LOAN            = 'ERR_NO_LOAN',
+  LOAN_CLOSED        = 'ERR_LOAN_CLOSED',
+  SDB_LIMIT          = 'ERR_SDB_LIMIT',
+  NO_SDB             = 'ERR_NO_SDB',
+  RENT_DUE           = 'ERR_RENT_DUE',
   INTERNAL           = 'ERR_INTERNAL',
 }

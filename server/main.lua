@@ -49,6 +49,7 @@ CreateThread(function()
 
   Accounts.ensureSystemAccounts()
   Society.ensureAccounts()
+  SDB.registerAll()
 
   -- Resource restarted mid-session: make sure everyone already in has a
   -- primary account.
@@ -89,7 +90,20 @@ RegisterCommand('sovbank', function(source, args)
   elseif sub == 'tx' and args[2] then
     local rows = Ledger.getTransactions(tonumber(args[2]), { limit = tonumber(args[3]) or 10 })
     print(json.encode(rows))
+  elseif sub == 'loans' then
+    -- Loan desk (until the Phase 4 admin panel): list / approve / deny.
+    local action = args[2]
+    if action == 'approve' and args[3] then
+      local ok, res = Loans.approve(tonumber(args[3]), 'console')
+      print(ok and json.encode(res) or ('error: ' .. tostring(res)))
+    elseif action == 'deny' and args[3] then
+      local ok, res = Loans.deny(tonumber(args[3]), 'console')
+      print(ok and json.encode(res) or ('error: ' .. tostring(res)))
+    else
+      local rows = Loans.listPending()
+      print(#rows == 0 and 'no pending loan applications' or json.encode(rows))
+    end
   else
-    print('usage: sovbank reconcile <accountId> | sovbank account <charid> | sovbank tx <accountId> [limit]')
+    print('usage: sovbank reconcile <accountId> | sovbank account <charid> | sovbank tx <accountId> [limit] | sovbank loans [approve|deny <loanId>]')
   end
 end, true)
