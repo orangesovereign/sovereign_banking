@@ -142,7 +142,13 @@ end
 handlers['getTellerData'] = guarded(function(ctx)
   Accounts.ensurePrimary(ctx.charid)
   return okWith(ctx, {
-    branch = { id = ctx.branch.id, name = ctx.branch.name, features = ctx.branch.features or {} },
+    branch = {
+      id = ctx.branch.id,
+      name = ctx.branch.name,
+      subtitle = ctx.branch.subtitle,
+      hours = ctx.branch.hours,
+      features = ctx.branch.features or {},
+    },
     config = {
       currencies = Config.Currencies,
       maxAccounts = Config.MaxAccounts,
@@ -234,12 +240,14 @@ handlers['statement'] = guarded(function(ctx, p)
   if not Accounts.hasLevel(accountId, ctx.charid, 'read') then
     return { ok = false, error = Err.ACCESS }
   end
-  local rows = Ledger.getTransactions(accountId, {
+  local filter = {
     limit = math.min(tonumber(p.limit) or 25, 100),
     offset = tonumber(p.offset) or 0,
     category = type(p.category) == 'string' and p.category or nil,
-  })
-  return { ok = true, data = { rows = rows } }
+  }
+  local rows = Ledger.getTransactions(accountId, filter)
+  local total = Ledger.countTransactions(accountId, filter)
+  return { ok = true, data = { rows = rows, total = total } }
 end)
 
 handlers['accountAccess'] = guarded(function(ctx, p)

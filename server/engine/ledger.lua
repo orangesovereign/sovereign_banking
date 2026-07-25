@@ -84,6 +84,25 @@ function Ledger.getTransactions(accountId, opts)
   ]]):format(table.concat(conds, ' AND ')), vals) or {}
 end
 
+--- Row count for the same filters as getTransactions (statement pagination).
+function Ledger.countTransactions(accountId, opts)
+  opts = opts or {}
+  accountId = tonumber(accountId)
+  if not accountId then return 0 end
+  local conds, vals = { 'account_id = ?' }, { accountId }
+  if opts.category then
+    conds[#conds + 1] = 'category = ?'
+    vals[#vals + 1] = tostring(opts.category)
+  end
+  if opts.currency ~= nil then
+    conds[#conds + 1] = 'currency = ?'
+    vals[#vals + 1] = tonumber(opts.currency)
+  end
+  return tonumber(Db.scalar(
+    ('SELECT COUNT(*) FROM sov_bank_transactions WHERE %s'):format(table.concat(conds, ' AND ')),
+    vals)) or 0
+end
+
 --- Reconciliation (tech spec §5.6): signed ledger sum vs stored balance,
 --- per currency. Drift logs at error level and is returned for the admin panel.
 function Ledger.reconcile(accountId)

@@ -9,31 +9,84 @@
 <body>
   <div id="app" class="hidden">
     <div class="panel">
-      <span class="corner tl">❖</span>
-      <span class="corner tr">❖</span>
-      <span class="corner bl">❖</span>
-      <span class="corner br">❖</span>
 
       <header class="masthead">
-        <button id="btn-close" class="close-btn" title="Take your leave">✕</button>
-        <div class="wallet" id="wallet-display"></div>
-        <div class="mast-rule"><span class="rule"></span><span class="orn">❦</span><span class="rule"></span></div>
-        <h1>Sovereign&nbsp;Bank</h1>
-        <div class="mast-sub">Incorporated 1896 · Deposits Insured by the Government Fund</div>
-        <div id="branch-name" class="branch-name">—</div>
+        <div class="brand">
+          <svg class="monogram" viewBox="0 0 64 76" aria-hidden="true">
+            <path d="M32 3 v9 M27.5 7.5 h9" stroke="#8a6d2f" stroke-width="1.6" fill="none"/>
+            <text x="26" y="55" font-family="Georgia, serif" font-size="52" fill="#b3903f" text-anchor="middle">S</text>
+            <text x="40" y="63" font-family="Georgia, serif" font-size="52" fill="#8a6d2f" text-anchor="middle">B</text>
+          </svg>
+          <div class="brand-rule"></div>
+          <div class="brand-text">
+            <h1>Sovereign Bank</h1>
+            <div class="est">
+              <svg class="est-arrow" viewBox="0 0 90 8"><path d="M0 4 H82 M82 4 l-7 -3.2 M82 4 l-7 3.2" stroke="currentColor" stroke-width="1" fill="none"/></svg>
+              <span>Est. 1896</span>
+              <svg class="est-arrow flip" viewBox="0 0 90 8"><path d="M0 4 H82 M82 4 l-7 -3.2 M82 4 l-7 3.2" stroke="currentColor" stroke-width="1" fill="none"/></svg>
+            </div>
+            <div class="motto">In Service to Prosperity</div>
+          </div>
+        </div>
       </header>
 
-      <div class="body">
-        <nav class="sidenav">
-          <div class="nav-head">Index</div>
-          <button class="nav-btn active" data-view="overview">Accounts</button>
-          <button class="nav-btn" data-view="transfer">Wire &amp; Pay</button>
-          <button class="nav-btn" data-view="open">New Account</button>
-          <div class="nav-foot">All banking is conducted<br>in person, at the counter.<br><br>— The Management</div>
-        </nav>
-        <main id="view" class="view"></main>
+      <div class="main">
+        <aside class="col col-left">
+          <div class="col-head boxed">Your Accounts</div>
+          <div id="cash-card"></div>
+          <div id="acct-cards" class="acct-cards"></div>
+          <div class="networth">
+            <div class="nw-label">Total Net Worth</div>
+            <div class="nw-value" id="networth">$0.00</div>
+            <svg class="orn" viewBox="0 0 120 10"><path d="M5 5 H50 M70 5 H115" stroke="currentColor" stroke-width="1"/><path d="M60 1.5 L64 5 L60 8.5 L56 5 Z" fill="currentColor"/></svg>
+          </div>
+        </aside>
+
+        <section class="col col-center">
+          <h2 id="center-title">Transaction Ledger</h2>
+          <svg class="orn center-orn" viewBox="0 0 120 10"><path d="M5 5 H50 M70 5 H115" stroke="currentColor" stroke-width="1"/><path d="M60 1.5 L64 5 L60 8.5 L56 5 Z" fill="currentColor"/></svg>
+          <div class="ledger-filters">
+            <div class="lf-left">
+              <label for="sel-account">Account:</label>
+              <select id="sel-account"></select>
+            </div>
+            <select id="sel-filter"></select>
+          </div>
+          <table class="ledger">
+            <thead>
+              <tr><th>Date</th><th>Description</th><th>Type</th><th class="num">Amount</th><th class="num">Balance</th></tr>
+            </thead>
+            <tbody id="ledger-rows"></tbody>
+          </table>
+          <div class="ledger-foot">
+            <span class="lf-rule"></span>
+            <button class="pager" id="pg-newer" title="Newer entries">‹</button>
+            <span id="ledger-count">—</span>
+            <button class="pager" id="pg-older" title="Older entries">›</button>
+            <span class="lf-rule"></span>
+          </div>
+        </section>
+
+        <aside class="col col-right">
+          <div class="col-head">Bank Actions</div>
+          <div id="actions" class="actions"></div>
+          <div class="col-head spaced">Branch Information</div>
+          <div id="branch-info" class="branch-info"></div>
+        </aside>
       </div>
+
+      <footer class="quickbar">
+        <div class="qa-label">
+          <span>Quick Actions</span>
+          <svg class="orn gold" viewBox="0 0 120 10"><path d="M5 5 H50 M70 5 H115" stroke="currentColor" stroke-width="1"/><path d="M60 1.5 L64 5 L60 8.5 L56 5 Z" fill="currentColor"/></svg>
+        </div>
+        <div id="quick-actions" class="quick-actions"></div>
+        <button class="exit" id="btn-close"><span class="keycap">ESC</span><span>Exit</span></button>
+      </footer>
+
     </div>
+
+    <div id="modal-root" class="hidden"></div>
     <div id="toasts"></div>
   </div>
   <script src="app.js"></script>
