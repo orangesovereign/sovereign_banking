@@ -105,10 +105,21 @@ Config.Fees = {
 -- ============================================================================
 -- Heist / branch cash reserve (design §5.11) — player balances are NEVER at risk
 -- ============================================================================
+-- The heist GAMEPLAY (cracking the vault, alarms, dispatch) belongs to a
+-- separate heist resource. The bank owns only the money: the till, the
+-- cooldown, and the guarantee that no player balance is reachable.
 Config.Heist = {
   reserveDefault   = 250000,        -- cents, base vault cash on hand per branch
   payoutRange      = { 0.4, 0.8 },  -- fraction of current reserve a heist yields
   replenishRealHrs = 48,            -- real-life hours to refill an emptied reserve
+  -- A branch's till cannot be claimed again inside this window, whatever the
+  -- heist script says. Enforced bank-side because it is a money rule.
+  cooldownRealHrs  = 6,
+  -- A robbery flag left set by a crashed heist resource would shut a teller
+  -- forever, so it self-clears after this long.
+  robberyLockMins  = 20,
+  -- Refuse teller service at a branch while it is being robbed.
+  closeTellerDuringRobbery = true,
 }
 
 -- ============================================================================

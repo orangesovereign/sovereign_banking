@@ -53,7 +53,8 @@ function Heist.getRow(branchId, currency)
     VALUES (?, ?, ?, ?, NOW())
   ]], { branch.id, currency, cap, cap })
   return Db.single([[
-    SELECT *, UNIX_TIMESTAMP(last_refilled_at) AS refilled_epoch
+    SELECT *, UNIX_TIMESTAMP(last_refilled_at) AS refilled_epoch,
+           UNIX_TIMESTAMP(last_claimed_at) AS claimed_epoch
     FROM sovereign_banking_reserves WHERE branch_id = ? AND currency = ?
   ]], { branch.id, currency })
 end
@@ -62,6 +63,101 @@ end
 function Heist.getReserve(branchId, currency)
   local row = Heist.getRow(branchId, currency)
   return row and (tonumber(row.balance) or 0) or nil
+end
+
+-- ============================================================================
+-- Robbery state
+--
+-- Live encounter state, held in memory: it describes something happening right
+-- now, not a fact worth surviving a restart. The heist resource owns the
+-- encounter and calls Begin/End around it; the bank uses the flag to shut the
+-- teller (you cannot make a deposit while a man holds a gun on the clerk) and
+-- self-clears it so a crashed heist script can't close a branch forever.
+-- ============================================================================
+
+local robberies = {} -- branchId -> { by, at }
+
+local function lockMins()
+  return tonumber(cfg().robberyLockMins) or 20
+end
+
+--- True while a robbery is in progress at this branch.
+function Heist.isUnderRobbery(branchId)
+  local r = robberies[tostring(branchId)]
+  if not r then return false end
+  if os.time() - r.at > lockMins() * 60 then
+    robberies[tostring(branchId)] = nil
+    Log.warn('robbery flag on %s expired after %d minutes — clearing it',
+      tostring(branchId), lockMins())
+    return false
+  end
+  return true
+end
+
+--- Called by the heist resource when a robbery starts.
+function Heist.beginRobbery(branchId, opts)
+  opts = opts or {}
+  local branch = Branches.getById(branchId)
+  if not branch then return false, Err.NO_BRANCH end
+  if Heist.isUnderRobbery(branch.id) then return false, Err.BRANCH_ROBBERY end
+
+  robberies[branch.id] = { by = opts.by, at = os.time() }
+  Log.warn('ROBBERY BEGUN at %s (by %s)', branch.name, tostring(opts.by or '?'))
+  Events.robberyStarted({
+    branchId = branch.id, branchName = branch.name,
+    by = opts.by, coords = branch.teller,
+  })
+  return true, { branchId = branch.id, expiresIn = lockMins() * 60 }
+end
+
+--- Called by the heist resource when it ends, however it ended.
+function Heist.endRobbery(branchId, opts)
+  opts = opts or {}
+  local branch = Branches.getById(branchId)
+  if not branch then return false, Err.NO_BRANCH end
+  robberies[branch.id] = nil
+  Log.info('robbery at %s ended (%s)', branch.name, tostring(opts.outcome or 'unknown'))
+  Events.robberyEnded({
+    branchId = branch.id, branchName = branch.name, outcome = opts.outcome,
+  })
+  return true, { branchId = branch.id }
+end
+
+--- Seconds remaining before this branch's till may be claimed again, 0 if now.
+function Heist.cooldownRemaining(branchId, currency)
+  local row = Heist.getRow(branchId, currency)
+  if not row then return 0 end
+  local last = tonumber(row.claimed_epoch)
+  if not last then return 0 end
+  local window = math.floor((tonumber(cfg().cooldownRealHrs) or 0) * HOUR)
+  local elapsed = os.time() - last
+  return elapsed >= window and 0 or (window - elapsed)
+end
+
+--- Everything the heist resource needs to decide whether a job is worth
+--- starting, in one call — so a crew isn't sent to crack an empty vault.
+function Heist.getStatus(branchId, currency)
+  currency = tonumber(currency) or Constants.Currency.MONEY
+  local branch = Branches.getById(branchId)
+  if not branch then return nil end
+  local row = Heist.getRow(branch.id, currency)
+  if not row then return nil end
+
+  local cooldown = Heist.cooldownRemaining(branch.id, currency)
+  local balance = tonumber(row.balance) or 0
+  return {
+    branchId = branch.id,
+    branchName = branch.name,
+    currency = currency,
+    balance = balance,
+    cap = tonumber(row.cap) or 0,
+    lastClaimedAt = tonumber(row.claimed_epoch),
+    lastRefilledAt = tonumber(row.refilled_epoch),
+    cooldownRemaining = cooldown,
+    underRobbery = Heist.isUnderRobbery(branch.id),
+    -- The single flag worth branching on: is there anything to take right now?
+    claimable = balance > 0 and cooldown == 0,
+  }
 end
 
 --- Rob the till (design §6.1 ClaimBranchReserve).
@@ -92,6 +188,17 @@ function Heist.claim(branchId, currency, opts)
     local reserve = tonumber(row.balance) or 0
     if reserve <= 0 then return false, Err.INSUFFICIENT_FUNDS end
 
+    -- Cooldown is enforced HERE rather than trusted to the caller: it governs
+    -- how fast money can leave the bank, which makes it a money rule. The
+    -- heist script should check getStatus first so a crew isn't sent to crack
+    -- a vault that will refuse them, but this is the authority.
+    local cooling = Heist.cooldownRemaining(branch.id, currency)
+    if cooling > 0 then
+      Log.info('heist claim on %s refused — %d min of cooldown left',
+        branch.id, math.ceil(cooling / 60))
+      return false, Err.COOLDOWN
+    end
+
     local looted
     if opts.amount then
       looted = math.floor(tonumber(opts.amount) or 0)
@@ -106,7 +213,7 @@ function Heist.claim(branchId, currency, opts)
 
     -- Drain the till first: the money exists once, and only in the reserve.
     local affected = Db.execute([[
-      UPDATE sovereign_banking_reserves SET balance = balance - ?
+      UPDATE sovereign_banking_reserves SET balance = balance - ?, last_claimed_at = NOW()
       WHERE branch_id = ? AND currency = ? AND balance >= ?
     ]], { looted, branch.id, currency, looted })
     if not affected or affected < 1 then return false, Err.INSUFFICIENT_FUNDS end
@@ -156,7 +263,16 @@ function Heist.claim(branchId, currency, opts)
       { name = 'Paid out to', value = tostring(#paid), inline = true },
     })
 
-    return true, { looted = looted, remaining = remaining, paid = paid, txId = uuid }
+    Events.reserveClaimed({
+      branchId = branch.id, branchName = branch.name, currency = currency,
+      looted = looted, remaining = remaining, paid = paid,
+      looters = looters, txId = uuid,
+    })
+
+    return true, {
+      looted = looted, remaining = remaining, paid = paid, txId = uuid,
+      cooldownRemaining = Heist.cooldownRemaining(branch.id, currency),
+    }
   end)
 end
 

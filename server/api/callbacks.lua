@@ -83,6 +83,11 @@ local function guarded(fn)
   return function(src, payload)
     local branch = Branches.forSource(src)
     if not branch then return { ok = false, error = Err.NOT_AT_BRANCH } end
+    -- No banking while the place is being robbed: the clerk has his hands up.
+    if Config.Heist.closeTellerDuringRobbery ~= false
+      and Heist.isUnderRobbery(branch.id) then
+      return { ok = false, error = Err.BRANCH_ROBBERY }
+    end
     local charid = Bridge.GetCharId(src)
     if not charid then return { ok = false, error = Err.UNKNOWN_CHAR } end
     return fn({ src = src, branch = branch, charid = charid }, payload)

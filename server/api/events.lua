@@ -30,6 +30,13 @@ function Events.debtInCollections(payload)    emit('debtInCollections', payload)
 function Events.warrantFiled(payload)         emit('warrantFiled', payload) end    -- Phase 2
 function Events.assetsSeized(payload)         emit('assetsSeized', payload) end    -- Phase 2
 
+-- Branch robbery (design §5.11). The heist resource owns the encounter; these
+-- announce what the BANK did about it, so lawman dispatch, notoriety, or any
+-- other listener can react without polling.
+function Events.robberyStarted(payload)       emit('robberyStarted', payload) end
+function Events.robberyEnded(payload)         emit('robberyEnded', payload) end
+function Events.reserveClaimed(payload)       emit('reserveClaimed', payload) end
+
 -- ============================================================================
 -- Inbound shims (other server resources → bank), fire-and-forget.
 -- Resources that need the (ok, result) reply should call the exports instead.

@@ -354,6 +354,31 @@ function API.GetBranchReserve(branchId, currency)
   return Heist.getReserve(branchId, currency or Constants.Currency.MONEY)
 end
 
+--- Everything needed to decide whether a job is worth starting, in one call:
+--- { balance, cap, cooldownRemaining, underRobbery, claimable, ... }.
+--- Check `claimable` before sending a crew.
+function API.GetBranchStatus(branchId, currency)
+  return Heist.getStatus(branchId, currency or Constants.Currency.MONEY)
+end
+
+--- Tell the bank a robbery is under way. Shuts the teller at that branch
+--- (Config.Heist.closeTellerDuringRobbery) and fires `robberyStarted`.
+--- Self-clears after Config.Heist.robberyLockMins so a crashed heist resource
+--- cannot close a branch permanently. opts: { by }.
+function API.BeginRobbery(branchId, opts)
+  return Heist.beginRobbery(branchId, opts)
+end
+
+--- Always call this when the encounter ends, however it ended.
+--- opts: { outcome = 'looted' | 'foiled' | 'abandoned' }.
+function API.EndRobbery(branchId, opts)
+  return Heist.endRobbery(branchId, opts)
+end
+
+function API.IsBranchUnderRobbery(branchId)
+  return Heist.isUnderRobbery(branchId)
+end
+
 --- Collect a branch's till (called by the heist/robbery resource).
 --- opts: { fraction | amount, looters = charid|{charid,...}, idem, source }
 --- Returns (ok, {looted, remaining, paid}) — auto-caps to what is on hand.
@@ -410,7 +435,11 @@ exports('GetLoans', API.GetLoans)
 exports('GetGoldQuote', API.GetGoldQuote)
 -- Phase 4: heist reserve & ops
 exports('GetBranchReserve', API.GetBranchReserve)
+exports('GetBranchStatus', API.GetBranchStatus)
 exports('ClaimBranchReserve', API.ClaimBranchReserve)
+exports('BeginRobbery', API.BeginRobbery)
+exports('EndRobbery', API.EndRobbery)
+exports('IsBranchUnderRobbery', API.IsBranchUnderRobbery)
 exports('GetMoneySupply', API.GetMoneySupply)
 -- Business & Tax Ledger (sovereign_stores)
 exports('RegisterBusiness', API.RegisterBusiness)

@@ -156,22 +156,64 @@ end)
 Other outbound events: `transactionCompleted`, `balanceChanged`, `debtOverdue`,
 `debtInCollections`, `loanDefaulted`, `accountFrozen`.
 
-### Heists — for the robbery script
+### Heists — for the heist script
+
+**Division of authority:** the heist resource owns the *encounter* — cracking
+the vault, alarms, timers, crew size, dispatch, escape. The bank owns the
+*money* — the till, the cooldown, and the guarantee that no player balance is
+reachable. The heist script never mints money; it asks the bank to release a
+score, and the bank caps it to what is actually in the till and ledgers it.
+That is what keeps a bug in the heist script from inventing currency.
 
 A robbery **can never touch a player or society balance**. The only pool
 reachable is the branch's physical cash reserve; that guarantee is structural,
 not a config toggle.
 
 ```lua
-local onHand = exports.sovereign_banking:GetBranchReserve('valentine', 0)
+-- 1. Is this job worth starting? One call answers it.
+local s = exports.sovereign_banking:GetBranchStatus('valentine', 0)
+-- s = { balance, cap, cooldownRemaining, underRobbery, claimable, ... }
+if not s.claimable then return end   -- empty till, or robbed too recently
 
+-- 2. Tell the bank the encounter has begun. This shuts the teller at that
+--    branch — no deposits while a man holds a gun on the clerk — and fires
+--    sovereign_banking:server:robberyStarted for lawman dispatch.
+exports.sovereign_banking:BeginRobbery('valentine', { by = crewLeaderCharid })
+
+-- 3. ... your gameplay: drilling, alarms, guards, timers ...
+
+-- 4. Collect the score. Capped to the till, split into the looters' wallets,
+--    ledgered as `heist`, and the cooldown starts here.
 local ok, res = exports.sovereign_banking:ClaimBranchReserve('valentine', 0, {
   fraction = math.random(40, 80) / 100,  -- your RNG; clamped to Config.Heist.payoutRange
-  looters  = { '42', '77' },             -- split into their wallets
-  idem     = heistUuid,
+  looters  = { '42', '77' },
+  idem     = heistUuid,                  -- a retry cannot pay twice
 })
--- res = { looted = 143000, remaining = 107000, paid = {...} }
+-- res = { looted, remaining, paid = {...}, cooldownRemaining }
+
+-- 5. ALWAYS end it, however it went — otherwise the teller stays shut until
+--    the lock self-expires (Config.Heist.robberyLockMins).
+exports.sovereign_banking:EndRobbery('valentine', { outcome = 'looted' })
 ```
+
+Errors worth handling: `ERR_COOLDOWN` (robbed too recently — the bank enforces
+this, so check `GetBranchStatus` first rather than discovering it after the
+crew has done the work), `ERR_INSUFFICIENT_FUNDS` (till already empty), and
+`ERR_BRANCH_ROBBERY` from `BeginRobbery` (someone else is already robbing it).
+
+Listen for these rather than polling:
+
+```lua
+'sovereign_banking:server:robberyStarted'  -- {branchId, branchName, by, coords}
+'sovereign_banking:server:reserveClaimed'  -- {branchId, looted, remaining, paid, looters, txId}
+'sovereign_banking:server:robberyEnded'    -- {branchId, outcome}
+```
+
+The same shape generalises to other targets: whichever script owns the thing
+being stolen owns the claim, and the heist script owns the encounter. Consider
+having target scripts *register* their heistable locations with the heist
+resource at boot (passing a claim function), so the heist script never has to
+hardcode knowledge of banks, stores or trains.
 
 ### Businesses & the Tax Ledger — for `sovereign_stores`
 

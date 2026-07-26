@@ -79,6 +79,9 @@ const ERR_TEXT = {
   ERR_SEIZURE_DENIED: 'No lawful grounds for seizure.',
   ERR_SEIZURE_DISABLED: 'Seizure is not permitted on this server.',
   ERR_NO_LIEN: 'No such lien.',
+  ERR_BRANCH_ROBBERY: 'The bank is being robbed. The counter is closed.',
+  ERR_COOLDOWN: 'The vault has already been emptied. Come back later.',
+  ERR_NO_BRANCH: 'No such branch.',
   ERR_INTERNAL: 'The clerk fumbled the paperwork. Try again.',
 };
 const errText = (code) => ERR_TEXT[code] || ERR_TEXT.ERR_INTERNAL;

@@ -171,6 +171,7 @@ CREATE TABLE IF NOT EXISTS sovereign_banking_reserves (
   balance          BIGINT NOT NULL DEFAULT 0,
   cap              BIGINT NOT NULL,
   last_refilled_at DATETIME NULL,
+  last_claimed_at  DATETIME NULL,
   PRIMARY KEY (branch_id, currency)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 

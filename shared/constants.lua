@@ -133,5 +133,8 @@ Constants.Err = {
   SEIZURE_DENIED     = 'ERR_SEIZURE_DENIED',
   SEIZURE_DISABLED   = 'ERR_SEIZURE_DISABLED',
   NO_LIEN            = 'ERR_NO_LIEN',
+  NO_BRANCH          = 'ERR_NO_BRANCH',
+  BRANCH_ROBBERY     = 'ERR_BRANCH_ROBBERY',  -- teller closed: robbery in progress
+  COOLDOWN           = 'ERR_COOLDOWN',        -- branch till robbed too recently
   INTERNAL           = 'ERR_INTERNAL',
 }

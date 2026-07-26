@@ -55,12 +55,50 @@ local function ensureSchema()
   return true
 end
 
+--- Additive migrations (tech spec §15.5).
+---
+--- install.sql is all CREATE TABLE IF NOT EXISTS, which does nothing to a
+--- table that already exists — so a column added after someone's first boot
+--- would never appear on their server. Each entry is checked against
+--- information_schema and added only when missing, so this is safe to run on
+--- every boot and safe to re-run forever.
+local MIGRATIONS = {
+  { table = 'sovereign_banking_reserves', column = 'last_claimed_at',
+    definition = 'DATETIME NULL AFTER last_refilled_at' },
+}
+
+local function ensureColumns()
+  local added = 0
+  for _, m in ipairs(MIGRATIONS) do
+    local present = Db.scalar([[
+      SELECT COUNT(*) FROM information_schema.columns
+      WHERE table_schema = DATABASE() AND table_name = ? AND column_name = ?
+    ]], { m.table, m.column })
+    if present ~= nil and tonumber(present) == 0 then
+      if Db.query(('ALTER TABLE %s ADD COLUMN %s %s')
+        :format(m.table, m.column, m.definition)) ~= nil then
+        Log.info('migration: added %s.%s', m.table, m.column)
+        added = added + 1
+      else
+        Log.error('migration FAILED: %s.%s', m.table, m.column)
+        return false
+      end
+    end
+  end
+  if added > 0 then Log.info('%d migration(s) applied', added) end
+  return true
+end
+
 CreateThread(function()
   waitForDb()
   if not ensureSchema() then
     -- Seeding accounts against a half-built schema would scatter partial state
     -- that is harder to clean up than a refused boot.
     Log.error('Sovereign Bank did NOT start. Fix the schema errors above and restart the resource.')
+    return
+  end
+  if not ensureColumns() then
+    Log.error('Sovereign Bank did NOT start. A migration failed; see above.')
     return
   end
 
