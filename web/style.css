@@ -175,7 +175,17 @@ html, body {
 }
 .acct-card:hover { border-color: var(--ink-3); }
 
-.acct-icon { width: 46px; height: 46px; flex: none; color: var(--ink-2); opacity: 0.85; }
+/* Supplied artwork (web/icons/png/). The container defines the box; the image
+   fits inside it, so one 96px source serves the 24 / 30 / 46px placements. */
+.ico { display: block; max-width: 100%; max-height: 100%; object-fit: contain; }
+
+.acct-icon { width: 46px; height: 46px; flex: none; opacity: 0.92; }
+/* Each card carries both tones and its background decides which one shows —
+   the card flips to dark when selected, and re-rendering just for that would
+   throw away the browser's decoded image. */
+.acct-icon .i-dark { display: none; }
+.acct-card.selected .acct-icon .i-paper { display: none; }
+.acct-card.selected .acct-icon .i-dark { display: block; }
 
 .acct-meta { flex: 1; min-width: 0; }
 .acct-name {
@@ -203,7 +213,7 @@ html, body {
   box-shadow: 0 0 0 1px rgba(168, 133, 59, 0.35), 0 4px 12px rgba(0, 0, 0, 0.4);
   color: #efe6cf;
 }
-.acct-card.selected .acct-icon { color: #cbb372; opacity: 1; }
+.acct-card.selected .acct-icon { opacity: 1; }
 .acct-card.selected .acct-number { color: #9d9074; }
 
 .badge-mini {
@@ -359,7 +369,8 @@ td.num {
   text-align: left;
 }
 .action-row:hover { background: rgba(255, 252, 240, 0.6); }
-.action-row .a-icon { width: 24px; height: 24px; flex: none; color: var(--ink-2); }
+.action-row .a-icon { width: 24px; height: 24px; flex: none; color: var(--ink-2); opacity: 0.9; }
+.action-row:hover .a-icon { opacity: 1; }
 .action-row .a-label {
   flex: 1;
   font-size: 12.5px;
@@ -384,7 +395,7 @@ td.num {
 }
 
 .branch-info { text-align: left; padding-top: 4px; }
-.branch-art { width: 210px; height: 130px; color: var(--ink-2); display: block; margin: 4px 0 10px; }
+.branch-art { width: 210px; height: 130px; display: block; margin: 4px 0 10px; }
 .branch-name {
   font-family: var(--display);
   font-size: 19px;
@@ -444,9 +455,10 @@ td.num {
   padding: 12px 6px;
 }
 .qa-btn:last-child { border-right: 1px solid rgba(216, 207, 182, 0.14); }
-.qa-btn svg { width: 30px; height: 30px; }
+.qa-btn svg, .qa-btn img { width: 30px; height: 30px; opacity: 0.88; }
 .qa-btn:hover { color: #f0e6c8; background: rgba(255, 248, 226, 0.05); }
 .qa-btn:hover svg { color: var(--gold); }
+.qa-btn:hover img { opacity: 1; }
 .qa-btn.soon { opacity: 0.4; }
 
 .exit {

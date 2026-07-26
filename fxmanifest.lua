@@ -58,6 +58,10 @@ files {
   'web/index.html',
   'web/style.css',
   'web/app.js',
+  -- NUI cannot load anything the manifest does not declare, so a missing
+  -- entry here shows up as silently blank artwork rather than an error.
+  'web/icons/png/paper/*.png',
+  'web/icons/png/dark/*.png',
 }
 
 dependencies {

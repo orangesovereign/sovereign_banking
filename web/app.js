@@ -154,38 +154,28 @@ function feeEstimate(minor, own) {
 }
 
 // ---------------------------------------------------------- engraved icons
+// Supplied artwork under web/icons/png/, in two tones: `paper` for the cream
+// surfaces and `dark` for the quick-action bar and the selected account card.
+// Everything picks a tone at render time except the account cards, which flip
+// between the two in CSS because their background changes on selection.
 
-const I = {
-  bank: (cls = '') => `<svg class="${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9.2 L12 3.4 L21 9.2 Z"/><path d="M5 9.2 V17.6 M8.5 9.2 V17.6 M12 9.2 V17.6 M15.5 9.2 V17.6 M19 9.2 V17.6"/><path d="M3.4 17.6 H20.6 M2.6 19.8 H21.4"/><circle cx="12" cy="6.6" r="0.9"/></svg>`,
-  piggy: (cls = '') => `<svg class="${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="11.3" cy="13.2" rx="7.6" ry="5.6"/><path d="M18.6 11.3 c1.5 0.2 2.4 1 2.4 2 c0 0.9 -0.7 1.6 -1.9 1.9"/><path d="M6.8 18.2 v2 M14.8 18.2 v2"/><path d="M8.7 7.9 c0.8 -1.2 2.4 -1.5 3.6 -0.9"/><path d="M9.4 6.6 h4.4"/><circle cx="7.6" cy="12" r="0.5" fill="currentColor"/><path d="M3.7 12.4 c-0.9 0.2 -1.3 0.9 -1.1 1.8"/></svg>`,
-  coin: (cls = '') => `<svg class="${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2"><circle cx="12" cy="12" r="8.4"/><circle cx="12" cy="12" r="6.2" stroke-dasharray="2 1.6"/><text x="12" y="15.4" text-anchor="middle" font-family="Georgia, serif" font-size="9" fill="currentColor" stroke="none">R</text></svg>`,
-  bag: (cls = '') => `<svg class="${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.6 6.4 L8.2 3.6 h7.6 L14.4 6.4"/><path d="M9.6 6.4 h4.8 c3.2 1.9 5 4.8 5 8 c0 3.7 -3.2 5.9 -7.4 5.9 c-4.2 0 -7.4 -2.2 -7.4 -5.9 c0 -3.2 1.8 -6.1 5 -8 Z"/><path d="M12 10.2 v6.4 M10 11.6 c0 -0.9 0.9 -1.4 2 -1.4 c1.1 0 2 0.5 2 1.4 c0 2 -4 1.6 -4 3.6 c0 0.9 0.9 1.4 2 1.4 c1.1 0 2 -0.5 2 -1.4"/></svg>`,
-  cash: (cls = '') => `<svg class="${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="8.4" width="18" height="9.6" rx="0.8"/><ellipse cx="12" cy="13.2" rx="3" ry="2.3"/><path d="M5.2 6.4 h13.6 M7 4.6 h10"/><circle cx="6" cy="13.2" r="0.5" fill="currentColor"/><circle cx="18" cy="13.2" r="0.5" fill="currentColor"/></svg>`,
-  transfer: (cls = '') => `<svg class="${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="M4.4 8.6 H19 M19 8.6 l-3.2 -3.2 M19 8.6 l-3.2 3.2" transform="translate(0,-1)"/><path d="M19.6 16.4 H5 M5 16.4 l3.2 -3.2 M5 16.4 l3.2 3.2" transform="translate(0,1)"/></svg>`,
-  bill: (cls = '') => `<svg class="${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3.4 h9 l4 4 V20.6 H6 Z"/><path d="M15 3.4 v4 h4"/><path d="M8.6 10 h7 M8.6 12.8 h7 M8.6 15.6 h4.4"/><circle cx="15.6" cy="17.6" r="1.5"/></svg>`,
-  papers: (cls = '') => `<svg class="${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="6" width="11.6" height="14.4"/><path d="M8 6 V3.6 H19.6 V18 H16"/><path d="M6.6 9.4 h6.4 M6.6 12.2 h6.4 M6.6 15 h6.4 M6.6 17.8 h4"/></svg>`,
-  safe: (cls = '') => `<svg class="${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3.6" y="3.6" width="16.8" height="16.8" rx="0.8"/><rect x="6" y="6" width="12" height="12"/><circle cx="12" cy="12" r="2.8"/><path d="M12 9.2 v-1.4 M12 16.2 v-1.4 M9.2 12 h-1.4 M16.2 12 h-1.4"/><path d="M5 20.4 v1.6 M19 20.4 v1.6"/></svg>`,
-  people: (cls = '') => `<svg class="${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8.6" r="2.9"/><path d="M3.6 19.4 c0 -3.4 2.4 -5.4 5.4 -5.4 c3 0 5.4 2 5.4 5.4"/><circle cx="16.6" cy="9.4" r="2.3"/><path d="M15.4 14.3 c2.9 0 5 1.9 5 5.1"/></svg>`,
-  columns: (cls = '') => `<svg class="${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8 L12 3.6 L20 8 M4.8 8 H19.2"/><path d="M6.4 10 V16.4 M10.2 10 V16.4 M13.8 10 V16.4 M17.6 10 V16.4"/><path d="M4.6 18.4 H19.4 M3.8 20.4 H20.2"/></svg>`,
-  key: (cls = '') => `<svg class="${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="12" r="4.2"/><circle cx="8" cy="12" r="1.4"/><path d="M12.2 12 H20.6 M17.6 12 v3 M20.6 12 v2.2"/></svg>`,
-  plus: (cls = '') => `<svg class="${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16"/><path d="M12 8.6 v6.8 M8.6 12 h6.8"/></svg>`,
-  chev: (cls = '') => `<svg class="${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5.5 L15.5 12 L9 18.5"/></svg>`,
-  goldbars: (cls = '') => `<svg class="${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 13.6 h5.6 l1.6 4.6 H2.4 Z"/><path d="M13.4 13.6 h5.6 l1.6 4.6 h-8.8 Z"/><path d="M8.8 7.4 h5.6 l1.6 4.6 H7.2 Z"/><path d="M10.2 9.6 h3.2" stroke-width="0.8"/><path d="M5.6 15.8 h2.6 M15 15.8 h2.6" stroke-width="0.8"/></svg>`,
-  branchArt: (cls = '') => `<svg class="${cls}" viewBox="0 0 150 96" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M75 8 L34 30 H116 Z"/><path d="M75 13 L44 28.6 H106 Z" stroke-width="0.8"/><circle cx="75" cy="23.5" r="2.6" stroke-width="0.8"/>
-    <path d="M37 30 V34 H113 V30"/>
-    <path d="M43 34 V70 M51 34 V70 M62 34 V70 M70 34 V70 M80 34 V70 M88 34 V70 M99 34 V70 M107 34 V70"/>
-    <path d="M46.8 36.6 h56.4 M46.8 38.8 h56.4" stroke-width="0.7"/>
-    <rect x="67" y="46" width="16" height="24" stroke-width="0.9"/><path d="M67 50 h16" stroke-width="0.7"/>
-    <path d="M40 70 H110 M36 74 H114 M32 78 H118 M28 82 H122"/>
-    <rect x="12" y="42" width="16" height="36" stroke-width="0.9"/><path d="M15.5 48 h9 v10 h-9 Z M15.5 63 h9 v10 h-9 Z" stroke-width="0.7"/>
-    <rect x="122" y="42" width="16" height="36" stroke-width="0.9"/><path d="M125.5 48 h9 v10 h-9 Z M125.5 63 h9 v10 h-9 Z" stroke-width="0.7"/>
-    <path d="M12 42 L20 36 L28 42 M122 42 L130 36 L138 42" stroke-width="0.9"/>
-    <path d="M8 86 H142" stroke-width="1.3"/>
-  </svg>`,
-};
+const ICON_NAMES = [
+  'bank', 'piggy', 'coin', 'bag', 'cash', 'transfer', 'bill', 'papers',
+  'safe', 'people', 'columns', 'key', 'plus', 'goldbars', 'branchArt',
+  'monogram',
+];
 
-const KIND_ICON = { checking: I.bank, savings: I.piggy, society: I.people, business: I.papers };
+const iconTag = (name, variant, cls) =>
+  `<img class="ico ${cls || ''}" src="icons/png/${variant || 'paper'}/${name}.png"` +
+  ` alt="" draggable="false">`;
+
+const I = {};
+ICON_NAMES.forEach((n) => { I[n] = (cls, variant) => iconTag(n, variant, cls); });
+
+// The chevron stays vector — it is a plain arrow, and it inherits text colour.
+I.chev = (cls = '') => `<svg class="${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5.5 L15.5 12 L9 18.5"/></svg>`;
+
+const KIND_ICON = { checking: 'bank', savings: 'piggy', society: 'people', business: 'papers' };
 
 // ------------------------------------------------------------------ header
 
@@ -209,7 +199,7 @@ function renderAccounts() {
 
   $('#acct-cards').innerHTML = accounts.map((a) => `
     <div class="acct-card ${a.id === S.sel ? 'selected' : ''}" data-id="${a.id}">
-      <span class="acct-icon">${(KIND_ICON[a.kind] || I.bank)()}</span>
+      <span class="acct-icon">${iconTag(KIND_ICON[a.kind] || 'bank', 'paper', 'i-paper')}${iconTag(KIND_ICON[a.kind] || 'bank', 'dark', 'i-dark')}</span>
       <span class="acct-meta">
         <div class="acct-name">${esc(a.name)}${a.isOwner ? '' : '<span class="badge-mini">shared</span>'}</div>
         <div class="acct-number">№ ${esc(a.number)}</div>
@@ -364,7 +354,7 @@ function renderQuickActions() {
   ];
   $('#quick-actions').innerHTML = rows.map((r, i) => `
     <button class="qa-btn ${r.soon ? 'soon' : ''}" data-i="${i}">
-      ${r.icon()}<span>${r.label}</span>
+      ${r.icon('', 'dark')}<span>${r.label}</span>
     </button>`).join('');
   document.querySelectorAll('.qa-btn').forEach((el) =>
     el.addEventListener('click', () => {
@@ -1387,7 +1377,7 @@ function renderAdminQuick() {
     } },
   ];
   $('#admin-quick').innerHTML = rows.map((r, i) => `
-    <button class="qa-btn" data-i="${i}">${r.icon()}<span>${r.label}</span></button>`).join('');
+    <button class="qa-btn" data-i="${i}">${r.icon('', 'dark')}<span>${r.label}</span></button>`).join('');
   document.querySelectorAll('#admin-quick .qa-btn').forEach((el) =>
     el.addEventListener('click', () => rows[Number(el.dataset.i)].run()));
 }
