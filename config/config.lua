@@ -79,8 +79,12 @@ Config.Teller = {
   serverSlack      = 2.5,         -- extra metres allowed by the server-side gate
   nearbyRange      = 30.0,        -- client switches to per-frame checks inside this
   blipSprite       = 'blip_shop_bank',
-  blipScale        = 0.2,
+  blipModifier     = nil,         -- e.g. 'BLIP_MODIFIER_MP_COLOR_32' to tint it
   spawnPeds        = true,        -- spawn a teller ped at each branch
+  -- Fallback when a branch sets no pedModel. Must be a model that exists in
+  -- this build — an invalid name simply never loads, and the branch gets no
+  -- ped (logged once). This one is in use by sovereign_stores.
+  pedModel         = 'U_M_M_NbxGeneralStoreOwner_01',
   pedSpawnDistance = 60.0,        -- spawn/despawn distance for teller peds
 }
 

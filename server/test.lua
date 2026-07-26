@@ -142,11 +142,23 @@ local function runSuite(playerSrc)
 
   -- A trailing nil shortens an oxmysql parameter array, so an optional last
   -- argument must never reach the driver as nil.
-  local billOk, billRes = Billing.issue(Constants.BillKind.INVOICE,
-    { type = 'character', id = 'SOVTEST-A' }, 'SOVTEST-B', 0, 500, nil,
-    { source = TAG })
-  check(t, 'a bill issued with no memo still writes',
-    billOk == true and billRes and billRes.billId ~= nil, tostring(billRes))
+  --
+  -- The target must be a REAL character: Billing.issue verifies the debtor
+  -- exists before writing, so the throwaway SOVTEST-* ids cannot be billed.
+  -- That check is correct behaviour, so this needs a live player's charid.
+  local realCharid = playerSrc and Bridge.GetCharId(playerSrc) or nil
+  local billOk, billRes
+  if realCharid then
+    billOk, billRes = Billing.issue(Constants.BillKind.INVOICE,
+      { type = 'character', id = 'SOVTEST-A' }, realCharid, 0, 500, nil,
+      { source = TAG })
+    check(t, 'a bill issued with no memo still writes',
+      billOk == true and billRes and billRes.billId ~= nil, tostring(billRes))
+  else
+    skip(t, 'a bill issued with no memo still writes',
+      'needs a real charid — run: banking_test <serverId>')
+  end
+
   if billOk and billRes and billRes.billId then
     -- SECURITY: collections must refuse a payment drawn from an account the
     -- DEBTOR does not control, or a collector could name any account id in
@@ -165,12 +177,19 @@ local function runSuite(playerSrc)
   end
 
   -- --------------------------------------------------------- idempotency
+  -- Measured as a DELTA, not against a hardcoded total: any test added above
+  -- this point shifts the running balance, and an expectation that has to be
+  -- kept in sync by hand fails for reasons that have nothing to do with
+  -- idempotency.
   local K = Util.uuid()
+  local beforeIdem = balMoney(A.id)
   local ok1, r1 = Money.accountCredit(A.id, 0, 1000, { idem = K, source = TAG })
   local ok2, r2 = Money.accountCredit(A.id, 0, 1000, { idem = K, source = TAG })
   check(t, 'idempotent replay returns original result, applies once',
-    ok1 and ok2 and not r1.replayed and r2.replayed == true and balMoney(A.id) == 8500,
-    ('bal=%s r2=%s'):format(balMoney(A.id), json.encode(r2 or {})))
+    ok1 and ok2 and not r1.replayed and r2.replayed == true
+      and balMoney(A.id) == beforeIdem + 1000,
+    ('applied %s, expected 1000; r2=%s'):format(
+      tostring((balMoney(A.id) or 0) - beforeIdem), json.encode(r2 or {})))
 
   -- ------------------------------------------- transfer + fee conservation
   local wireFee = feeFor(5000, true)

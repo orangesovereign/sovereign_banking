@@ -1,10 +1,10 @@
 --[[
-  config/locations.lua — bank branches, tellers, blips (design §5.10).
+  config/locations.lua â€” bank branches, tellers, blips (design Â§5.10).
   No ATMs. Branches only. Consumed by the client (blips, teller peds, prompts)
   and by the server-side proximity gate on every account operation.
 
   NOTE: coordinates below are close approximations of the in-game bank
-  counters — fine-tune teller/ped positions and headings on your server.
+  counters â€” fine-tune teller/ped positions and headings on your server.
 ]]
 
 Config = Config or {}
@@ -20,7 +20,7 @@ Config.Locations = {
       teller = vector3(-308.75, 775.3, 118.66), -- interaction point (counter)
       tellerHeading = 185.0,                    -- ped faces the customer
       tellerRange   = 2.5,
-      pedModel = 'u_m_m_valbanker_01',
+      pedModel = 'U_M_M_NbxGeneralStoreOwner_01',
       features = { transfers = true, sdb = true, gold = true, loans = true },
       -- reserve / rateOverrides used by later phases
       reserve = { cap = 250000 },
@@ -34,7 +34,7 @@ Config.Locations = {
       teller = vector3(1288.9, -1296.5, 77.04),
       tellerHeading = 315.0,
       tellerRange   = 2.5,
-      pedModel = 'u_m_m_valbanker_01',
+      pedModel = 'U_M_M_NbxGeneralStoreOwner_01',
       features = { transfers = true, sdb = true, gold = true, loans = true },
       reserve = { cap = 250000 },
     },
@@ -47,9 +47,9 @@ Config.Locations = {
       teller = vector3(2646.9, -1289.7, 52.25),
       tellerHeading = 280.0,
       tellerRange   = 2.5,
-      pedModel = 'u_m_m_valbanker_01',
+      pedModel = 'U_M_M_NbxGeneralStoreOwner_01',
       features = { transfers = true, sdb = true, gold = true, loans = true },
-      reserve = { cap = 400000 }, -- city bank holds more (design §5.11)
+      reserve = { cap = 400000 }, -- city bank holds more (design Â§5.11)
     },
     {
       id     = 'blackwater',
@@ -60,7 +60,7 @@ Config.Locations = {
       teller = vector3(-817.0, -1276.2, 43.68),
       tellerHeading = 280.0,
       tellerRange   = 2.5,
-      pedModel = 'u_m_m_valbanker_01',
+      pedModel = 'U_M_M_NbxGeneralStoreOwner_01',
       features = { transfers = true, sdb = true, gold = true, loans = true },
       reserve = { cap = 300000 },
     },
