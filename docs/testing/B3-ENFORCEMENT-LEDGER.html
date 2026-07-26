@@ -260,6 +260,19 @@
                 "gate": true,
                 "t": "Look at an <b>invoice</b> row in the queue.",
                 "x": "<b>Expect:</b> it has <b>no Escalate control at all</b>, and reads <em>civil debt &mdash; never a warrant</em>. Calling the export directly returns <code>ERR_CIVIL_DEBT</code>."
+            },
+            {
+                "id": "Q8",
+                "who": "b",
+                "gate": true,
+                "t": "<b>Security regression.</b> As a collector, try to collect a debt from an account the <b>debtor does not own</b> &mdash; e.g. another player's account id:<pre class=\"sql\">exports.sov_bank:RecordCollection(billId, 100, {\n  collectorCharid = '&lt;collector&gt;', payWith = &lt;someone else's accountId&gt; })</pre>",
+                "x": "<b>Expect:</b> <code>ERR_ACCESS</code> and <b>no money moves</b>. <i>An audit found this unguarded &mdash; a collector could name any account in the bank as the payment source and drain it under color of a real debt. The suite covers it too; this confirms it end to end.</i>"
+            },
+            {
+                "id": "Q9",
+                "who": "b",
+                "t": "Check the currency on a settled collection where the bill was denominated in gold.",
+                "x": "<b>Expect:</b> the debt was settled in <b>gold</b>, not dollars. <i>Collections previously hardcoded dollars, letting a gold debt be discharged at a 20:1 discount.</i>"
             }
         ]
     },

@@ -99,6 +99,9 @@ function Billing.issue(kind, issuer, targetCharid, currency, amount, memo, opts)
   local dueDays = tonumber(opts.dueDays) or dueDaysFor(kind)
   local dueEpoch = os.time() + math.floor(dueDays * DAY)
 
+  -- memo is optional and last: Util.truncate returns nil for a non-string,
+  -- and a trailing nil shortens the oxmysql parameter array so the bind count
+  -- no longer matches the statement. Coerce rather than pass nil.
   local id = Db.insert([[
     INSERT INTO sov_bank_bills
       (bill_uuid, issuer_type, issuer_id, target_charid, kind, currency, amount,
@@ -106,7 +109,7 @@ function Billing.issue(kind, issuer, targetCharid, currency, amount, memo, opts)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', FROM_UNIXTIME(?), ?)
   ]], {
     uuid, issuer.type, tostring(issuer.id), targetCharid, kind, currency, amount,
-    amount, dueEpoch, Util.truncate(memo, 140),
+    amount, dueEpoch, Util.truncate(memo, 140) or '',
   })
   if not id then return false, Err.INTERNAL end
 
@@ -154,7 +157,10 @@ function Billing.pay(billId, payerCharid, payWith, amount, meta)
       return false, Err.BILL_CLOSED
     end
 
-    local toPay = amount and tonumber(amount) or remaining
+    -- Note the floor+or-0: `amount and tonumber(amount) or remaining` would
+    -- fall through to "pay everything" when a caller passes a non-numeric
+    -- amount, which is the opposite of what they asked for.
+    local toPay = amount and math.floor(tonumber(amount) or 0) or remaining
     if not Util.isValidAmount(toPay) or toPay > remaining then
       return false, Err.BAD_AMOUNT
     end
@@ -201,6 +207,10 @@ function Billing.pay(billId, payerCharid, payWith, amount, meta)
     end
 
     if closed then
+      -- Settling the debt releases anything secured against it.
+      if Collections and Collections.releaseLiensForBill then
+        Collections.releaseLiensForBill(bill.id)
+      end
       Events.billPaid({
         billId = bill.id, payerCharid = payerCharid,
         issuerType = bill.issuer_type, issuerId = bill.issuer_id,
@@ -222,7 +232,21 @@ function Billing.cancel(billId, meta)
     local bill = Billing.get(billId)
     if not bill then return false, Err.NO_BILL end
     if bill.status == 'paid' or bill.status == 'cancelled' then return false, Err.BILL_CLOSED end
+    local wasWarrant = bill.status == 'warrant'
     Db.execute("UPDATE sov_bank_bills SET status = 'cancelled' WHERE id = ?", { bill.id })
+    if Collections and Collections.releaseLiensForBill then
+      Collections.releaseLiensForBill(bill.id)
+    end
+    -- A cancelled warrant must be cleared on the lawman's side too, or it
+    -- hangs over the character with no debt left to pay.
+    if wasWarrant then
+      Events.billPaid({
+        billId = bill.id, payerCharid = bill.target_charid,
+        issuerType = bill.issuer_type, issuerId = bill.issuer_id,
+        amount = tonumber(bill.amount), kind = bill.kind,
+        wasWarrant = true, cancelled = true,
+      })
+    end
     Log.info('bill #%d cancelled (%s)', bill.id, (meta and meta.source) or '?')
     return true, { billId = bill.id }
   end)

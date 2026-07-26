@@ -11,7 +11,8 @@ browser — each is self-contained, marks persist between visits, and the
 | [B2 — Commerce & Credit](docs/testing/B2-COMMERCE-LEDGER.html) | bills, settlement & routing, the delinquency ladder, society funds & payroll, loans, savings interest, gold, deposit boxes | **Other scripts may issue debt and pay wages** |
 | [B3 — Enforcement & Ops](docs/testing/B3-ENFORCEMENT-LEDGER.html) | business tax ledger, collections queue, lawful seizure, the branch reserve guarantee, `/bankadmin`, the export contract, closing audit | **Heists may be enabled; the Tax Collector job may be handed out** |
 
-155 items in all, 51 of them blockers.
+159 items in all, 54 of them blockers — four of which are regression tests for
+bugs a pre-boot audit turned up (see the notes on those items).
 
 ## How to work them
 

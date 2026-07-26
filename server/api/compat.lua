@@ -20,14 +20,15 @@
 
 if not (Config.Compat and Config.Compat.enabled) then return end
 
+--- Legacy callers pass a PLAYER SOURCE. Deliberately no charid fallback:
+--- VORP charidentifiers and FiveM server ids are both small positive integers,
+--- so "if no player is at this source, assume it's a charid" silently pays a
+--- completely unrelated character whenever the two namespaces overlap. A
+--- caller with a charid should use the native exports instead.
 local function resolveCharid(idOrSrc)
   local n = tonumber(idOrSrc)
-  if n and n > 0 then
-    local charid = Bridge.GetCharId(n)
-    if charid then return charid end
-  end
-  -- Not a live source: treat the argument as a charidentifier.
-  return tostring(idOrSrc)
+  if not n or n <= 0 then return nil end
+  return Bridge.GetCharId(n)
 end
 
 local function legacyOpts(reason)
@@ -39,26 +40,48 @@ local function legacyOpts(reason)
   }
 end
 
---- Balance in DISPLAY units, or 0 when unavailable.
+local function warnUnresolved(fn, idOrSrc)
+  Log.warn('compat.%s: no loaded character at source %s — ignoring', fn, tostring(idOrSrc))
+end
+
+--- Balance in DISPLAY units, or 0 when unavailable. Reads whichever pool
+--- Config.Compat.target names, so a legacy "can they afford it?" check and the
+--- debit that follows it look at the same money.
 local function getMoney(idOrSrc, currency)
-  local minor = API.GetWalletBalance(resolveCharid(idOrSrc), tonumber(currency) or 0)
+  local charid = resolveCharid(idOrSrc)
+  if not charid then warnUnresolved('getMoney', idOrSrc) return 0 end
+  currency = tonumber(currency) or 0
+  local opts = legacyOpts(nil)
+  local minor
+  if opts.target == 'wallet' then
+    minor = API.GetWalletBalance(charid, currency)
+  else
+    local acct = Accounts.getPrimary(charid)
+    minor = acct and API.GetBankBalance(acct.id, currency) or 0
+  end
   return Util.toDisplay(minor or 0)
 end
 
 local function addMoney(idOrSrc, currency, amount)
-  local ok = API.AddMoney(resolveCharid(idOrSrc), tonumber(currency) or 0,
+  local charid = resolveCharid(idOrSrc)
+  if not charid then warnUnresolved('addMoney', idOrSrc) return false end
+  local ok = API.AddMoney(charid, tonumber(currency) or 0,
     Util.toMinor(tonumber(amount) or 0), legacyOpts('compat_add'))
   return ok == true
 end
 
 local function removeMoney(idOrSrc, currency, amount)
-  local ok = API.RemoveMoney(resolveCharid(idOrSrc), tonumber(currency) or 0,
+  local charid = resolveCharid(idOrSrc)
+  if not charid then warnUnresolved('removeMoney', idOrSrc) return false end
+  local ok = API.RemoveMoney(charid, tonumber(currency) or 0,
     Util.toMinor(tonumber(amount) or 0), legacyOpts('compat_remove'))
   return ok == true
 end
 
 local function canAfford(idOrSrc, currency, amount)
-  return API.CanAfford(resolveCharid(idOrSrc), tonumber(currency) or 0,
+  local charid = resolveCharid(idOrSrc)
+  if not charid then return false end
+  return API.CanAfford(charid, tonumber(currency) or 0,
     Util.toMinor(tonumber(amount) or 0), legacyOpts(nil)) == true
 end
 

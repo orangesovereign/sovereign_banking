@@ -49,11 +49,21 @@ function Util.formatAmount(minor, currency)
   return ('$%.2f'):format(v)
 end
 
---- Truncate a string to n chars (nil-safe). Used for memo/category columns.
+--- Truncate a string to n CHARACTERS (nil-safe). Used for memo/category columns.
+--- The columns are utf8mb4 VARCHAR(n), which counts characters, while Lua's #
+--- and :sub count bytes. Cutting mid-sequence produces invalid UTF-8, which
+--- MySQL rejects outright in strict mode — so a player typing accents or emoji
+--- into a memo could otherwise fail the whole transaction.
 function Util.truncate(s, n)
   if type(s) ~= 'string' then return nil end
-  if #s <= n then return s end
-  return s:sub(1, n)
+  local len = utf8 and utf8.len and utf8.len(s) or nil
+  if not len then
+    -- Not valid UTF-8 (or no utf8 library): fall back to a byte cut.
+    return #s <= n and s or s:sub(1, n)
+  end
+  if len <= n then return s end
+  local cut = utf8.offset(s, n + 1)
+  return cut and s:sub(1, cut - 1) or s:sub(1, n)
 end
 
 function Util.now()

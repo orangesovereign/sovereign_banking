@@ -458,6 +458,13 @@
                 "who": "b",
                 "t": "<code>sovbank reconcile &lt;savingsAccountId&gt;</code>",
                 "x": "<b>Expect:</b> no drift. Interest is a ledgered credit like any other."
+            },
+            {
+                "id": "I8",
+                "who": "b",
+                "gate": true,
+                "t": "<b>Regression.</b> After the capped catch-up in I3, wait for two more scheduler ticks (~30 min) without touching the account.",
+                "x": "<b>Expect:</b> <b>no further interest</b> for the backdated period. <i>An audit found the clock advanced only by the paid periods, so the sweep kept paying the rest four at a time every tick &mdash; the cap became a slow drip of the same windfall. Periods beyond the cap are now forfeited.</i>"
             }
         ]
     },
@@ -547,6 +554,13 @@
                 "who": "a",
                 "t": "Pay the rent.",
                 "x": "<b>Expect:</b> the box unlocks and the paid-through date extends from today, not from the lapsed date."
+            },
+            {
+                "id": "V9",
+                "who": "a",
+                "gate": true,
+                "t": "<b>Regression.</b> Have two players rent a box at the same moment, and separately double-click <b>Pay Rent</b>.",
+                "x": "<b>Expect:</b> both rentals succeed, and the double-click takes <b>one</b> payment for one period. <i>An audit found the rental placeholder collided on a UNIQUE key (the second renter was charged and got nothing, and one stranded row could have blocked every rental server-wide), and that rent renewal had no mutex.</i>"
             }
         ]
     }

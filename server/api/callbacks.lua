@@ -735,9 +735,14 @@ handlers['adminReconcile'] = adminGuarded(function(_, p)
 end)
 
 handlers['adminLoanDecision'] = adminGuarded(function(ctx, p)
-  local ok, res = (p.decision == 'approve')
-    and Loans.approve(p.loanId, ctx.actor)
-    or Loans.deny(p.loanId, ctx.actor)
+  -- Written out rather than an and/or ternary: that form drops the second
+  -- return value, and a FAILED approve would fall through to deny().
+  local ok, res
+  if p.decision == 'approve' then
+    ok, res = Loans.approve(p.loanId, ctx.actor)
+  else
+    ok, res = Loans.deny(p.loanId, ctx.actor)
+  end
   if not ok then return { ok = false, error = res } end
   local pending = {}
   for _, l in ipairs(Loans.listPending()) do

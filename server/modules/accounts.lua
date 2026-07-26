@@ -228,29 +228,38 @@ end
 
 --- Open an additional account for a character, respecting Config.MaxAccounts.
 --- Returns (accountRow) or (nil, errCode).
+--- Serialized per character: the cap check and the insert straddle a yield, so
+--- without a lock two simultaneous requests both see room and both create.
 function Accounts.createNamed(charid, name, kind)
   charid = tostring(charid)
   if kind ~= Constants.AccountKind.CHECKING and kind ~= Constants.AccountKind.SAVINGS then
     return nil, Constants.Err.BAD_KIND
   end
 
-  local count = tonumber(Db.scalar([[
-    SELECT COUNT(*) FROM sov_bank_accounts
-    WHERE owner_type = 'character' AND owner_id = ? AND status <> 'closed'
-  ]], { charid })) or 0
-  if count >= (Config.MaxAccounts or 4) then
-    return nil, Constants.Err.ACCOUNT_LIMIT
-  end
+  local ok, result = Money.withLocks({ 'newacct:' .. charid }, function()
+    local count = Db.scalar([[
+      SELECT COUNT(*) FROM sov_bank_accounts
+      WHERE owner_type = 'character' AND owner_id = ? AND status <> 'closed'
+    ]], { charid })
+    -- A failed count must not read as "no accounts" and wave the cap through.
+    if count == nil then return false, Constants.Err.INTERNAL end
+    if (tonumber(count) or 0) >= (Config.MaxAccounts or 4) then
+      return false, Constants.Err.ACCOUNT_LIMIT
+    end
 
-  name = type(name) == 'string' and name:gsub('^%s+', ''):gsub('%s+$', '') or ''
-  if #name == 0 then
-    name = kind == Constants.AccountKind.SAVINGS and 'Savings' or 'Checking'
-  end
-  name = Util.truncate(name, 30)
+    local clean = type(name) == 'string' and name:gsub('^%s+', ''):gsub('%s+$', '') or ''
+    if #clean == 0 then
+      clean = kind == Constants.AccountKind.SAVINGS and 'Savings' or 'Checking'
+    end
 
-  local acct = Accounts.create(Constants.OwnerType.CHARACTER, charid, name, kind)
-  if not acct then return nil, Constants.Err.INTERNAL end
-  return acct
+    local acct = Accounts.create(Constants.OwnerType.CHARACTER, charid,
+      Util.truncate(clean, 30), kind)
+    if not acct then return false, Constants.Err.INTERNAL end
+    return true, acct
+  end)
+
+  if not ok then return nil, result end
+  return result
 end
 
 --- Close an account: owner only, all balances zero (design §5.1). Runs under

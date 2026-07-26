@@ -156,7 +156,10 @@ function Bridge.GetCharName(charid)
     'SELECT firstname, lastname FROM characters WHERE charidentifier = ? LIMIT 1',
     { tostring(charid) })
   if not row then return tostring(charid) end
-  return (('%s %s'):format(row.firstname or '', row.lastname or '')):gsub('^%s+', ''):gsub('%s+$', '')
+  -- Parenthesised so gsub's second return (the replacement count) is dropped.
+  local name = (('%s %s'):format(row.firstname or '', row.lastname or '')
+    :gsub('^%s+', ''):gsub('%s+$', ''))
+  return name
 end
 
 -- ============================================================================
@@ -210,15 +213,31 @@ function Bridge.GetItemCount(src, itemName)
   return ok and count or 0
 end
 
---- Remove items from a character. Returns true only when the removal applied.
+--- Remove items from a character. Read-back verified, for the same reason the
+--- wallet is: vorp_inventory's subItem gives no reliable success signal, and a
+--- seizure must never pay a collector for goods the debtor still holds.
+--- Returns true only when the count actually fell by the requested amount.
 function Bridge.RemoveItem(src, itemName, count)
-  local ok = pcall(function()
-    exports.vorp_inventory:subItem(tonumber(src), itemName, tonumber(count) or 1)
+  count = tonumber(count) or 1
+  local before = Bridge.GetItemCount(src, itemName)
+  if before < count then return false end
+
+  local ok, err = pcall(function()
+    exports.vorp_inventory:subItem(tonumber(src), itemName, count)
   end)
   if not ok then
-    Log.error('could not remove %s x%s from %s', itemName, tostring(count), tostring(src))
+    Log.error('could not remove %s x%s from %s: %s',
+      itemName, tostring(count), tostring(src), tostring(err))
+    return false
   end
-  return ok
+
+  local after = Bridge.GetItemCount(src, itemName)
+  if after ~= before - count then
+    Log.error('item removal did not apply: %s x%s from %s (%s -> %s)',
+      itemName, tostring(count), tostring(src), tostring(before), tostring(after))
+    return false
+  end
+  return true
 end
 
 function Bridge.OpenStash(src, stashId)

@@ -130,11 +130,24 @@ function Seizure.seize(collectorCharid, debtorCharid, billId, itemList, opts)
   local debtorSrc = Bridge.GetSourceFromCharId(debtorCharid)
   if not debtorSrc then return false, Err.OFFLINE end
 
-  return Money.withLocks({ 'bill:' .. bill.id }, function()
+  -- The debtor is locked as well as the bill: two collectors working two of
+  -- the same debtor's debts would otherwise both read the same item counts and
+  -- both seize the same goods.
+  return Money.withLocks({ 'bill:' .. bill.id, 'seize:' .. debtorCharid }, function()
     local fresh = Billing.get(bill.id)
     if not fresh then return false, Err.NO_BILL end
     local owed = tonumber(fresh.balance_remaining) or 0
     if owed <= 0 then return false, Err.BILL_CLOSED end
+
+    -- Resolve (and prove usable) the destination for the proceeds BEFORE any
+    -- goods leave the debtor. Discovering a frozen creditor after the fact
+    -- would mean their property was destroyed for nothing.
+    local creditorId = recipientAccount(fresh)
+    if not creditorId then return false, Err.INTERNAL end
+    local creditorAcct = Accounts.getById(creditorId)
+    if not creditorAcct or creditorAcct.status ~= 'active' then
+      return false, Err.FROZEN
+    end
 
     -- Gate 2: plan the take, capped to the debt and to what they actually hold.
     local cap = scfg().capToDebt == false and math.huge or owed
@@ -174,15 +187,20 @@ function Seizure.seize(collectorCharid, debtorCharid, billId, itemList, opts)
     local applied = math.min(assessed, owed)
     local surplus = assessed - applied
 
-    local creditorId = recipientAccount(fresh)
-    if not creditorId then return false, Err.INTERNAL end
+    local currency = tonumber(fresh.currency) or Constants.Currency.MONEY
     local memoLine = Util.truncate(
       ('Seized goods sold — %s #%d'):format(fresh.kind, fresh.id), 140)
 
-    local ok, res = Money.accountCredit(creditorId, Constants.Currency.MONEY, applied, {
+    local ok, res = Money.accountCredit(creditorId, currency, applied, {
       category = Constants.Category.SEIZURE, memo = memoLine, source = 'sov_bank',
     })
-    if not ok then return false, res end
+    if not ok then
+      -- Goods are already gone. Nothing can un-take them, so record the loss
+      -- loudly rather than silently pocketing it.
+      Log.error('CRITICAL: seizure on bill #%d removed goods worth %s from %s but the creditor could not be credited (%s)',
+        fresh.id, tostring(assessed), debtorCharid, tostring(res))
+      return false, res
+    end
 
     -- Commission out of the creditor's share (same shape as a field collection).
     local rate = tonumber((Config.Collections or {}).taxCollectorCommission) or 0
@@ -191,7 +209,7 @@ function Seizure.seize(collectorCharid, debtorCharid, billId, itemList, opts)
       local socId = (Config.Collections or {}).collectorSociety
       local socAcct = socId and Society.account(socId) or nil
       if socAcct and socAcct.id ~= creditorId then
-        local paid = Money.transfer(creditorId, socAcct.id, Constants.Currency.MONEY,
+        local paid = Money.transfer(creditorId, socAcct.id, currency,
           commission, {
             category = Constants.Category.COMMISSION,
             memo = ('Seizure commission — bill #%d (%s)'):format(fresh.id, collectorCharid),
@@ -209,12 +227,16 @@ function Seizure.seize(collectorCharid, debtorCharid, billId, itemList, opts)
     if surplus > 0 and scfg().returnSurplus ~= false then
       local debtorAcct = Accounts.ensurePrimary(debtorCharid)
       if debtorAcct then
-        local sok = Money.accountCredit(debtorAcct.id, Constants.Currency.MONEY, surplus, {
+        local sok = Money.accountCredit(debtorAcct.id, currency, surplus, {
           category = Constants.Category.SEIZURE,
           memo = ('Surplus returned from seizure — bill #%d'):format(fresh.id),
           source = 'sov_bank',
         })
         if sok then surplusReturned = surplus end
+      end
+      if surplusReturned == 0 then
+        Log.error('seizure on bill #%d: %s of surplus could not be returned to %s',
+          fresh.id, tostring(surplus), debtorCharid)
       end
     end
 

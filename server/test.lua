@@ -126,6 +126,44 @@ local function runSuite(playerSrc)
     skip(t, 'disabled currency refused', 'rol is enabled in config')
   end
 
+  -- --------------------------------------------- regressions (audited fixes)
+  -- Memos are cut on a character boundary: a byte-wise cut through a
+  -- multi-byte sequence produces invalid UTF-8 that MySQL rejects outright,
+  -- failing the whole transaction.
+  local multibyte = string.rep('é', 100) -- 200 bytes, 100 characters
+  local cutMemo = Util.truncate(multibyte, 140)
+  check(t, 'truncate cuts on a character boundary, not a byte boundary',
+    cutMemo ~= nil and utf8.len(cutMemo) ~= nil and utf8.len(cutMemo) <= 140,
+    cutMemo and ('len=%s bytes=%d'):format(tostring(utf8.len(cutMemo)), #cutMemo) or 'nil')
+
+  ok, res = Money.accountCredit(A.id, 0, 100,
+    { category = 'adjust', source = TAG, memo = multibyte })
+  check(t, 'a movement with a multi-byte memo commits', ok, tostring(res))
+
+  -- A trailing nil shortens an oxmysql parameter array, so an optional last
+  -- argument must never reach the driver as nil.
+  local billOk, billRes = Billing.issue(Constants.BillKind.INVOICE,
+    { type = 'character', id = 'SOVTEST-A' }, 'SOVTEST-B', 0, 500, nil,
+    { source = TAG })
+  check(t, 'a bill issued with no memo still writes',
+    billOk == true and billRes and billRes.billId ~= nil, tostring(billRes))
+  if billOk and billRes and billRes.billId then
+    -- SECURITY: collections must refuse a payment drawn from an account the
+    -- DEBTOR does not control, or a collector could name any account id in
+    -- the bank and drain it under color of a real debt.
+    Db.execute("UPDATE sov_bank_bills SET status = 'in_collections' WHERE id = ?",
+      { billRes.billId })
+    local aBefore2 = balMoney(A.id)
+    local sOk, sErr = Collections.record(billRes.billId, 'SOVTEST-COLLECTOR', 100,
+      A.id, { source = TAG }) -- account A belongs to SOVTEST-A, not the debtor
+    check(t, 'collections refuses an account the debtor does not control',
+      sOk == false and sErr == Constants.Err.ACCESS and balMoney(A.id) == aBefore2,
+      ('ok=%s err=%s'):format(tostring(sOk), tostring(sErr)))
+    Db.execute('DELETE FROM sov_bank_bills WHERE id = ?', { billRes.billId })
+  else
+    skip(t, 'collections refuses a foreign source account', 'bill could not be issued')
+  end
+
   -- --------------------------------------------------------- idempotency
   local K = Util.uuid()
   local ok1, r1 = Money.accountCredit(A.id, 0, 1000, { idem = K, source = TAG })

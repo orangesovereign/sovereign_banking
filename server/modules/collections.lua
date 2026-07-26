@@ -111,7 +111,7 @@ end
 
 --- Move the collector's commission creditor → Tax Office fund. Its own atomic
 --- transfer, so a commission failure can never strand the principal.
-local function payCommission(amount, creditorId, bill, collectorCharid)
+local function payCommission(amount, creditorId, bill, collectorCharid, currency)
   local rate = tonumber(cfg().taxCollectorCommission) or 0
   if rate <= 0 then return 0 end
   local commission = math.floor(amount * rate + 0.5)
@@ -121,7 +121,7 @@ local function payCommission(amount, creditorId, bill, collectorCharid)
   local socAcct = socId and Society.account(socId) or nil
   if not socAcct or socAcct.id == creditorId then return 0 end
 
-  local ok = Money.transfer(creditorId, socAcct.id, Constants.Currency.MONEY, commission, {
+  local ok = Money.transfer(creditorId, socAcct.id, currency or Constants.Currency.MONEY, commission, {
     category = Constants.Category.COMMISSION,
     memo = ('Collection commission — bill #%d (%s)'):format(bill.id, tostring(collectorCharid)),
     source = 'sov_bank',
@@ -156,32 +156,48 @@ function Collections.record(billId, collectorCharid, amount, payWith, meta)
     local creditorId = recipientAccount(bill)
     if not creditorId then return false, Err.INTERNAL end
 
+    -- Debts are settled in the bill's own currency (a gold debt is not
+    -- discharged with dollars).
+    local currency = tonumber(bill.currency) or Constants.Currency.MONEY
+
     local memoLine = Util.truncate(
       ('Collected on %s #%d by %s'):format(bill.kind, bill.id, tostring(collectorCharid)), 140)
 
     if payWith == 'wallet' then
-      local ok, res = Money.walletDebit(bill.target_charid, Constants.Currency.MONEY, toPay,
+      local ok, res = Money.walletDebit(bill.target_charid, currency, toPay,
         { category = Constants.Category.COLLECTION, memo = memoLine,
           source = meta.source, silent = true })
       if not ok then return false, res end
-      local ok2, res2 = Money.accountCredit(creditorId, Constants.Currency.MONEY, toPay,
+      local ok2, res2 = Money.accountCredit(creditorId, currency, toPay,
         { category = Constants.Category.COLLECTION, memo = memoLine, source = meta.source })
       if not ok2 then
-        Money.walletCredit(bill.target_charid, Constants.Currency.MONEY, toPay, {
+        local backOk = Money.walletCredit(bill.target_charid, currency, toPay, {
           category = Constants.Category.COMPENSATION, source = 'sov_bank',
           memo = ('reversal: %s'):format(memoLine), silent = true,
         })
+        if not backOk then
+          Log.error('CRITICAL: bill #%d — took %s from %s but could not credit the creditor OR refund them',
+            bill.id, tostring(toPay), tostring(bill.target_charid))
+        end
         return false, res2
       end
     else
+      -- SECURITY: the payment must come from an account the DEBTOR controls.
+      -- Without this a collector could name any account id in the bank as the
+      -- source and drain it under color of a real debt.
       local fromId = tonumber(payWith)
       if not fromId then return false, Err.NO_ACCOUNT end
-      local ok, res = Money.transfer(fromId, creditorId, Constants.Currency.MONEY, toPay,
+      if not Accounts.hasLevel(fromId, bill.target_charid, 'withdraw') then
+        Log.warn('collections: %s tried to collect bill #%d from account %s, which the debtor does not control',
+          tostring(collectorCharid), bill.id, tostring(fromId))
+        return false, Err.ACCESS
+      end
+      local ok, res = Money.transfer(fromId, creditorId, currency, toPay,
         { category = Constants.Category.COLLECTION, memo = memoLine, source = meta.source })
       if not ok then return false, res end
     end
 
-    local commission = payCommission(toPay, creditorId, bill, collectorCharid)
+    local commission = payCommission(toPay, creditorId, bill, collectorCharid, currency)
 
     local newRemaining = remaining - toPay
     local closed = newRemaining <= 0
@@ -220,14 +236,26 @@ function Collections.placeLien(debtorCharid, accountId, amount, opts)
   amount = math.floor(tonumber(amount) or 0)
   if not Util.isValidAmount(amount) then return false, Err.BAD_AMOUNT end
 
-  local id = Db.insert([[
-    INSERT INTO sov_bank_liens (bill_id, account_id, debtor_charid, amount, placed_by)
-    VALUES (?, ?, ?, ?, ?)
-  ]], {
-    opts.billId and tonumber(opts.billId) or nil,
-    accountId and tonumber(accountId) or nil,
-    tostring(debtorCharid), amount, tostring(opts.collectorCharid or 'sov_bank'),
-  })
+  if not Bridge.CharacterExists(debtorCharid) then return false, Err.UNKNOWN_CHAR end
+
+  -- Build the column list dynamically: a nil in the middle of an oxmysql
+  -- parameter array makes it sparse and silently truncates the bind, so the
+  -- nullable columns are omitted rather than passed as nil.
+  local cols, marks, vals = {}, {}, {}
+  local function add(c, v)
+    if v ~= nil then
+      cols[#cols + 1] = c; marks[#marks + 1] = '?'; vals[#vals + 1] = v
+    end
+  end
+  add('bill_id', opts.billId and tonumber(opts.billId) or nil)
+  add('account_id', accountId and tonumber(accountId) or nil)
+  add('debtor_charid', tostring(debtorCharid))
+  add('amount', amount)
+  add('placed_by', tostring(opts.collectorCharid or 'sov_bank'))
+
+  local id = Db.insert(
+    ('INSERT INTO sov_bank_liens (%s) VALUES (%s)')
+      :format(table.concat(cols, ', '), table.concat(marks, ', ')), vals)
   if not id then return false, Err.INTERNAL end
   Log.info('lien #%d placed on %s for %s', id, tostring(debtorCharid), amount)
   return true, { lienId = id }
@@ -303,7 +331,10 @@ end
 function Collections.escalate(billId, collectorCharid)
   billId = tonumber(billId)
   if not billId then return false, Err.NO_BILL end
-  if cfg().arrestable and cfg().arrestable.allowManualEscalation == false then
+  local arr = cfg().arrestable or {}
+  -- Tier 3 switched off entirely disables manual escalation too, not just the
+  -- automatic sweep.
+  if arr.enabled == false or arr.allowManualEscalation == false then
     return false, Err.ACCESS
   end
 

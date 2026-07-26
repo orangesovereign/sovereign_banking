@@ -79,19 +79,31 @@ function SDB.rentNew(charid, size, meta)
     return false, Err.SDB_LIMIT
   end
 
-  local ok, err = chargeWallet(charid, price,
-    ('Deposit box rent (%s)'):format(size), meta.source)
-  if not ok then return false, err end
-
+  -- Reserve the row BEFORE taking payment, and with a unique placeholder:
+  -- stash_id carries a UNIQUE key, so a shared literal would collide between
+  -- two concurrent rentals — and charging first would mean taking rent for a
+  -- box that was never created.
   local paidUntil = os.time() + math.floor((Config.SDB.rentPeriodRealDays or 7) * DAY)
+  local placeholder = 'TMP-' .. Util.uuid():sub(1, 18)
   local id = Db.insert([[
     INSERT INTO sov_bank_sdb (owner_id, size, stash_id, rent_paid_until)
     VALUES (?, ?, ?, FROM_UNIXTIME(?))
-  ]], { charid, size, 'pending', paidUntil })
+  ]], { charid, size, placeholder, paidUntil })
   if not id then return false, Err.INTERNAL end
 
+  local ok, err = chargeWallet(charid, price,
+    ('Deposit box rent (%s)'):format(size), meta.source)
+  if not ok then
+    Db.execute('DELETE FROM sov_bank_sdb WHERE id = ? AND stash_id = ?', { id, placeholder })
+    return false, err
+  end
+
   local sid = stashId(id)
-  Db.execute('UPDATE sov_bank_sdb SET stash_id = ? WHERE id = ?', { sid, id })
+  if not Db.execute('UPDATE sov_bank_sdb SET stash_id = ? WHERE id = ?', { sid, id }) then
+    Log.error('CRITICAL: sdb #%d rented and paid for by %s but the stash id could not be set',
+      id, charid)
+    return false, Err.INTERNAL
+  end
   Bridge.RegisterStash(sid, ('Deposit Box %d'):format(id), cfg.slots or 10)
 
   Log.info('sdb #%d rented by %s (%s, %s slots)', id, charid, size, cfg.slots)
@@ -103,22 +115,39 @@ end
 function SDB.payRent(boxId, charid, meta)
   meta = meta or {}
   charid = tostring(charid)
-  local box = SDB.get(boxId)
-  if not box then return false, Err.NO_SDB end
-  if tostring(box.owner_id) ~= charid then return false, Err.ACCESS end
+  boxId = tonumber(boxId)
+  if not boxId then return false, Err.NO_SDB end
 
-  local price = rentPrice(box.size)
-  if price <= 0 then return false, Err.INTERNAL end
-  local ok, err = chargeWallet(charid, price,
-    ('Deposit box #%d rent'):format(box.id), meta.source)
-  if not ok then return false, err end
+  -- Locked per box: the charge and the extension straddle several yields, so
+  -- a double-click would otherwise take two payments and grant one period.
+  return Money.withLocks({ 'sdb:' .. boxId }, function()
+    local box = SDB.get(boxId)
+    if not box then return false, Err.NO_SDB end
+    if tostring(box.owner_id) ~= charid then return false, Err.ACCESS end
 
-  local now = os.time()
-  local base = math.max(now, tonumber(box.paid_epoch) or now)
-  local paidUntil = base + math.floor((Config.SDB.rentPeriodRealDays or 7) * DAY)
-  Db.execute('UPDATE sov_bank_sdb SET rent_paid_until = FROM_UNIXTIME(?) WHERE id = ?',
-    { paidUntil, box.id })
-  return true, { boxId = box.id, paidUntil = paidUntil }
+    local price = rentPrice(box.size)
+    if price <= 0 then return false, Err.INTERNAL end
+    local ok, err = chargeWallet(charid, price,
+      ('Deposit box #%d rent'):format(box.id), meta.source)
+    if not ok then return false, err end
+
+    -- Extend from the later of now / current expiry, computed in SQL against
+    -- the live row so paying early never wastes days.
+    local period = math.floor((Config.SDB.rentPeriodRealDays or 7) * DAY)
+    if not Db.execute([[
+      UPDATE sov_bank_sdb
+      SET rent_paid_until = FROM_UNIXTIME(
+            GREATEST(COALESCE(UNIX_TIMESTAMP(rent_paid_until), ?), ?) + ?)
+      WHERE id = ?
+    ]], { os.time(), os.time(), period, box.id }) then
+      Log.error('CRITICAL: sdb #%d rent taken from %s but the expiry was not extended',
+        box.id, charid)
+      return false, Err.INTERNAL
+    end
+
+    local fresh = SDB.get(box.id)
+    return true, { boxId = box.id, paidUntil = fresh and tonumber(fresh.paid_epoch) or nil }
+  end)
 end
 
 --- May this box be opened right now? (rent current, within grace)

@@ -59,29 +59,45 @@ function Loans.create(charid, principal, rate, accountId, meta)
   if not Util.isValidAmount(principal) or principal > (Config.Loans.maxPrincipal or 500000) then
     return false, Err.BAD_AMOUNT
   end
-  if openCount(charid) >= (Config.Loans.maxActivePerChar or 1) then
-    return false, Err.LOAN_LIMIT
-  end
 
-  local acct = accountId and Accounts.getById(accountId) or Accounts.ensurePrimary(charid)
-  if not acct or acct.status ~= 'active' then return false, Err.NO_ACCOUNT end
+  -- The count and the insert are serialized per borrower: without a lock, two
+  -- near-simultaneous applications both see zero open loans and both succeed,
+  -- letting one character hold twice the permitted debt.
+  local id, totalDue
+  local ok, err = Money.withLocks({ 'loanapp:' .. charid }, function()
+    if openCount(charid) >= (Config.Loans.maxActivePerChar or 1) then
+      return false, Err.LOAN_LIMIT
+    end
 
-  rate = tonumber(rate) or Config.Loans.originationRate or 0.10
-  if rate < 0 or rate > 1 then rate = Config.Loans.originationRate or 0.10 end
-  local totalDue = principal + math.floor(principal * rate + 0.5)
+    local acct = accountId and Accounts.getById(accountId) or Accounts.ensurePrimary(charid)
+    if not acct or acct.status ~= 'active' then return false, Err.NO_ACCOUNT end
 
-  local id = Db.insert([[
-    INSERT INTO sov_bank_loans
-      (charidentifier, account_id, principal, total_due, balance_remaining, interest_flat, status)
-    VALUES (?, ?, ?, ?, ?, ?, 'pending')
-  ]], { charid, acct.id, principal, totalDue, totalDue, rate })
-  if not id then return false, Err.INTERNAL end
+    rate = tonumber(rate) or Config.Loans.originationRate or 0.10
+    if rate < 0 or rate > 1 then rate = Config.Loans.originationRate or 0.10 end
+    totalDue = principal + math.floor(principal * rate + 0.5)
+
+    id = Db.insert([[
+      INSERT INTO sov_bank_loans
+        (charidentifier, account_id, principal, total_due, balance_remaining, interest_flat, status)
+      VALUES (?, ?, ?, ?, ?, ?, 'pending')
+    ]], { charid, acct.id, principal, totalDue, totalDue, rate })
+    if not id then return false, Err.INTERNAL end
+    return true, { loanId = id }
+  end)
+  if not ok then return false, err end
 
   Log.info('loan #%d application: %s asks %s (total due %s)', id, charid, principal, totalDue)
 
   if Config.Loans.requireApproval == false then
-    local ok, res = Loans.approve(id, 'auto')
-    if not ok then return false, res end
+    local aok, ares = Loans.approve(id, 'auto')
+    if not aok then
+      -- Auto-approval failed (e.g. the target account was frozen). Close the
+      -- application out, or it counts against maxActivePerChar forever and the
+      -- borrower can never apply again.
+      Db.execute("UPDATE sov_bank_loans SET status = 'denied', approved_by = 'auto-failed' WHERE id = ? AND status = 'pending'",
+        { id })
+      return false, ares
+    end
     return true, { loanId = id, totalDue = totalDue, status = 'active' }
   end
   return true, { loanId = id, totalDue = totalDue, status = 'pending' }
@@ -160,7 +176,9 @@ function Loans.repay(loanId, payerCharid, payWith, amount, meta)
     end
 
     local remaining = tonumber(loan.balance_remaining) or 0
-    local toPay = amount and tonumber(amount) or remaining
+    -- floor+or-0 rather than `amount and tonumber(amount) or remaining`: the
+    -- latter silently repays the WHOLE loan when given a malformed amount.
+    local toPay = amount and math.floor(tonumber(amount) or 0) or remaining
     if not Util.isValidAmount(toPay) or toPay > remaining then
       return false, Err.BAD_AMOUNT
     end

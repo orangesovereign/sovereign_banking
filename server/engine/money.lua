@@ -63,6 +63,11 @@ end
 function Money.withLocks(keys, fn)
   local uniq, seen = {}, {}
   for _, k in ipairs(keys) do
+    -- Normalize numeric key suffixes: 'acct:' .. 1001 and 'acct:' .. 1001.0
+    -- are different strings but the same account, which would hand two
+    -- concurrent operations two different "locks" on one row.
+    local prefix, num = tostring(k):match('^(%a+:)(%-?%d+)%.0$')
+    if prefix then k = prefix .. num end
     if not seen[k] then
       seen[k] = true
       uniq[#uniq + 1] = k
@@ -95,12 +100,20 @@ local function statusErr(status)
   return status == 'frozen' and Err.FROZEN or Err.ACCOUNT_CLOSED
 end
 
-local function replayOf(row)
-  return {
+--- Result for an operation that was already applied under this idempotency
+--- key. `extra` carries the operation-specific fields a caller would otherwise
+--- lose on a replay (a transfer's fee, a disburse's total) — without them an
+--- integrator doing arithmetic on the result crashes on a retry.
+local function replayOf(row, extra)
+  local out = {
     txId = row.tx_uuid,
     balanceAfter = row.balance_after and tonumber(row.balance_after) or nil,
     replayed = true,
   }
+  if extra then
+    for k, v in pairs(extra) do out[k] = v end
+  end
+  return out
 end
 
 -- ============================================================================
@@ -124,7 +137,15 @@ local function legStatements(leg)
   leg.newBal = (tonumber(leg.acct[col]) or 0) + leg.delta
 
   local update
-  if leg.delta < 0 and not leg.unguarded then
+  if leg.unguarded then
+    -- Compensation legs carry no predicate at all: a reversal must apply even
+    -- to an account that was frozen or closed in the meantime, or the failed
+    -- operation it is undoing becomes permanent.
+    update = {
+      query = ('UPDATE sov_bank_accounts SET %s = %s + ? WHERE id = ?'):format(col, col),
+      values = { leg.delta, leg.acct.id },
+    }
+  elseif leg.delta < 0 then
     update = {
       query = ('UPDATE sov_bank_accounts SET %s = %s + ? WHERE id = ? AND status = \'active\' AND %s + ? >= ?')
         :format(col, col, col),
@@ -209,21 +230,47 @@ local function commitLegs(legs)
     local col = Constants.CurrencyColumn[f.currency]
     local observed = tonumber(Db.scalar(
       ('SELECT %s FROM sov_bank_accounts WHERE id = ?'):format(col), { f.accountId }))
-    if observed ~= f.expected then
+
+    -- A nil here means the VERIFICATION READ failed (Db.* returns nil on any
+    -- SQL error), not that the balance is wrong. Treating that as a mismatch
+    -- would unwind an operation that committed perfectly — and, if the reads
+    -- in the rollback path also fail, would delete the ledger rows while
+    -- leaving the balances moved. Leave the committed state alone and shout.
+    if observed == nil then
+      Log.error('CRITICAL: could not verify account %s after commit of op %s — leaving it committed; run a reconcile',
+        tostring(f.accountId), tostring(legs[1].uuid))
+    elseif observed ~= f.expected then
       Log.error('CRITICAL: balance guard mismatch on account %s (expected %s, observed %s) — rolling back op %s',
         tostring(f.accountId), tostring(f.expected), tostring(observed), tostring(legs[1].uuid))
+      -- Reverse only the accounts whose updates demonstrably applied, and only
+      -- delete the ledger rows if every one of them came back. A partial
+      -- reversal with the rows deleted would destroy money and leave no trace
+      -- of where it went.
+      local reversedAll = true
       for _, k in ipairs(order) do
         local g = finals[k]
         local c = Constants.CurrencyColumn[g.currency]
         local obs = tonumber(Db.scalar(
           ('SELECT %s FROM sov_bank_accounts WHERE id = ?'):format(c), { g.accountId }))
         if obs == g.expected then -- this account's updates applied; reverse them
-          Db.execute(('UPDATE sov_bank_accounts SET %s = %s - ? WHERE id = ?'):format(c, c),
-            { g.netDelta, g.accountId })
+          if not Db.execute(('UPDATE sov_bank_accounts SET %s = %s - ? WHERE id = ?'):format(c, c),
+            { g.netDelta, g.accountId }) then
+            reversedAll = false
+          end
+        elseif obs ~= g.expected - g.netDelta then
+          -- Neither the post-op nor the pre-op value: we cannot account for
+          -- this balance, so the ledger rows must stay as evidence.
+          reversedAll = false
         end
       end
-      for _, l in ipairs(legs) do
-        Db.execute('DELETE FROM sov_bank_transactions WHERE tx_uuid = ?', { l.uuid })
+
+      if reversedAll then
+        for _, l in ipairs(legs) do
+          Db.execute('DELETE FROM sov_bank_transactions WHERE tx_uuid = ?', { l.uuid })
+        end
+      else
+        Log.error('CRITICAL: op %s could not be fully reversed — ledger rows KEPT as the record. Reconcile these accounts by hand.',
+          tostring(legs[1].uuid))
       end
       return 'fail', Err.INTERNAL
     end
@@ -441,13 +488,19 @@ function Money.deposit(charid, accountId, currency, amount, meta)
     if not Bridge.WalletRemove(src, currency, amount) then
       -- Compensate: reverse the committed bank credit. Unguarded — the
       -- reversal must always apply. Ledger keeps both entries.
-      local comp = {
-        acct = Accounts.getById(accountId), currency = currency, delta = -amount,
+      local compAcct = Accounts.getById(accountId)
+      local status = compAcct and select(1, commitLegs({ {
+        acct = compAcct, currency = currency, delta = -amount,
         unguarded = true, uuid = Util.uuid(),
         category = Constants.Category.COMPENSATION, source = 'sov_bank',
         memo = ('reversal of %s'):format(leg.uuid),
-      }
-      commitLegs({ comp })
+      } })) or nil
+      if status ~= 'ok' then
+        -- The bank was credited but the wallet was never debited, and the
+        -- reversal did not land: money has been created. Loudest possible.
+        Log.error('CRITICAL: deposit %s credited account %s but neither the wallet debit nor its reversal applied — MONEY CREATED, reconcile now',
+          tostring(leg.uuid), tostring(accountId))
+      end
       return false, Err.WALLET_APPLY
     end
 
@@ -500,13 +553,19 @@ function Money.withdraw(charid, accountId, currency, amount, meta)
     if status == 'fail' then return false, data end
 
     if not Bridge.WalletAdd(src, currency, amount) then
-      local comp = {
-        acct = Accounts.getById(accountId), currency = currency, delta = amount,
+      local compAcct = Accounts.getById(accountId)
+      local status = compAcct and select(1, commitLegs({ {
+        acct = compAcct, currency = currency, delta = amount,
         unguarded = true, uuid = Util.uuid(),
         category = Constants.Category.COMPENSATION, source = 'sov_bank',
         memo = ('reversal of %s'):format(leg.uuid),
-      }
-      commitLegs({ comp })
+      } })) or nil
+      if status ~= 'ok' then
+        -- The account was debited but the cash never reached the wallet, and
+        -- the reversal did not land: the player has been robbed by the bank.
+        Log.error('CRITICAL: withdrawal %s debited account %s but neither the wallet credit nor its reversal applied — MONEY DESTROYED, reconcile now',
+          tostring(leg.uuid), tostring(accountId))
+      end
       return false, Err.WALLET_APPLY
     end
 
@@ -560,7 +619,7 @@ function Money.disburse(fromAccountId, credits, currency, meta)
   return Money.withLocks(lockKeys, function()
     if meta.idem then
       local row = Ledger.findByUuid(meta.idem)
-      if row then return true, replayOf(row) end
+      if row then return true, replayOf(row, { total = total }) end
     end
 
     local from = Accounts.getById(fromAccountId)
@@ -627,8 +686,10 @@ function Money.transfer(fromAccountId, toAccountId, currency, amount, meta)
   local insAcctId = nil
   if fee > 0 then
     local ins = Accounts.getSystem(Constants.SystemAccounts.INSURANCE)
-    -- No insurance account, or insurance is a party to the transfer → waive.
-    if ins and ins.id ~= fromAccountId and ins.id ~= toAccountId then
+    -- No insurance account, insurance is a party to the transfer, or it is not
+    -- active → waive the fee. Without the status check a frozen insurance
+    -- account would make every fee-bearing transfer on the server fail.
+    if ins and ins.status == 'active' and ins.id ~= fromAccountId and ins.id ~= toAccountId then
       insAcctId = ins.id
     else
       fee = 0
@@ -641,7 +702,7 @@ function Money.transfer(fromAccountId, toAccountId, currency, amount, meta)
   return Money.withLocks(lockKeys, function()
     if meta.idem then
       local row = Ledger.findByUuid(meta.idem)
-      if row then return true, replayOf(row) end
+      if row then return true, replayOf(row, { fee = fee }) end
     end
 
     local from = Accounts.getById(fromAccountId)

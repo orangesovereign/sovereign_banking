@@ -67,6 +67,13 @@ function Savings.accrue(accountId)
 
   local periods = math.min(elapsed, Config.Interest.catchUpCap or 4)
 
+  -- The clock always advances past EVERY elapsed period, even though at most
+  -- `catchUpCap` of them are paid. Advancing only by the paid count would
+  -- leave the rest pending, and the sweep would simply pay them on the next
+  -- tick — turning the cap into a slow drip of the same windfall it exists to
+  -- prevent (design §12.2). Periods beyond the cap are forfeited.
+  local newBase = base + elapsed * psec
+
   -- Compound per period on the running balance.
   local balance = tonumber(acct.balance_money) or 0
   local total = 0
@@ -74,13 +81,21 @@ function Savings.accrue(accountId)
     local i = periodInterest(balance + total)
     total = total + i
   end
-  if total <= 0 then
-    -- Nothing to post (tiny balance) — still advance the clock so the same
-    -- empty periods aren't re-scanned forever.
-    Db.execute([[
+
+  -- Compare-and-set on the base we read: only the run that actually observed
+  -- this base may move the clock, so concurrent lazy and swept accruals can
+  -- never both advance it. Runs unconditionally — it is idempotent by
+  -- construction, and skipping it on a replay would strand the clock forever
+  -- if a credit committed but its clock update did not.
+  local function advance()
+    return Db.execute([[
       UPDATE sov_bank_savings_accrual SET last_accrued_at = FROM_UNIXTIME(?)
       WHERE account_id = ? AND last_accrued_at = FROM_UNIXTIME(?)
-    ]], { base + periods * psec, accountId, base })
+    ]], { newBase, accountId, base })
+  end
+
+  if total <= 0 then
+    advance() -- tiny balance: nothing to post, but don't re-scan these periods
     return 0, periods
   end
 
@@ -95,13 +110,10 @@ function Savings.accrue(accountId)
     return 0, 0
   end
 
+  advance()
   if not res.replayed then
-    -- We won the race: advance the clock from the base we used.
-    Db.execute([[
-      UPDATE sov_bank_savings_accrual SET last_accrued_at = FROM_UNIXTIME(?)
-      WHERE account_id = ? AND last_accrued_at = FROM_UNIXTIME(?)
-    ]], { base + periods * psec, accountId, base })
-    Log.info('interest: account %d earned %s over %d period(s)', accountId, total, periods)
+    Log.info('interest: account %d earned %s over %d period(s)%s', accountId, total, periods,
+      elapsed > periods and (' (%d period(s) forfeited)'):format(elapsed - periods) or '')
   end
   return res.replayed and 0 or total, periods
 end

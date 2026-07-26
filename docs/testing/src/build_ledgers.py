@@ -494,6 +494,7 @@ B2 = [
    {"id": "I5", "who": "b", "gate": True, "t": "Backdate again, but this time let the <b>scheduler</b> post it instead of visiting.", "x": "<b>Expect:</b> the same single posting. Both paths derive the same idempotency key from the accrual base, so only one can ever land."},
    {"id": "I6", "who": "a", "t": "Do the same with a <b>checking</b> account.", "x": "<b>Expect:</b> <b>no interest, ever</b>. Only savings accrue."},
    {"id": "I7", "who": "b", "t": "<code>sovbank reconcile &lt;savingsAccountId&gt;</code>", "x": "<b>Expect:</b> no drift. Interest is a ledgered credit like any other."},
+   {"id": "I8", "who": "b", "gate": True, "t": "<b>Regression.</b> After the capped catch-up in I3, wait for two more scheduler ticks (~30 min) without touching the account.", "x": "<b>Expect:</b> <b>no further interest</b> for the backdated period. <i>An audit found the clock advanced only by the paid periods, so the sweep kept paying the rest four at a time every tick &mdash; the cap became a slow drip of the same windfall. Periods beyond the cap are now forfeited.</i>"},
  ]},
  {"art": "VII", "title": "The Assayer", "tag": "gold &middot; spread", "why":
   "A period-plausible exchange counter: the bank sells dear and buys cheap, and the difference is its own.",
@@ -514,6 +515,7 @@ B2 = [
    {"id": "V6", "who": "a", "t": "Rent boxes past <code>maxPerChar</code> (default 2).", "x": "<b>Expect:</b> <code>ERR_SDB_LIMIT</code>."},
    {"id": "V7", "who": "b", "t": "Force the rent overdue:<pre class=\"sql\">UPDATE sov_bank_sdb\nSET rent_paid_until = NOW() - INTERVAL 30 DAY\nWHERE id = ?;</pre>", "x": "<b>Expect:</b> the box shows <b>rent due</b> and Open is disabled; forcing it returns <code>ERR_RENT_DUE</code>."},
    {"id": "V8", "who": "a", "t": "Pay the rent.", "x": "<b>Expect:</b> the box unlocks and the paid-through date extends from today, not from the lapsed date."},
+   {"id": "V9", "who": "a", "gate": True, "t": "<b>Regression.</b> Have two players rent a box at the same moment, and separately double-click <b>Pay Rent</b>.", "x": "<b>Expect:</b> both rentals succeed, and the double-click takes <b>one</b> payment for one period. <i>An audit found the rental placeholder collided on a UNIQUE key (the second renter was charged and got nothing, and one stranded row could have blocked every rental server-wide), and that rent renewal had no mutex.</i>"},
  ]},
 ]
 
@@ -556,6 +558,8 @@ B3 = [
    {"id": "Q5", "who": "a", "t": "Collect only part of another debt.", "x": "<b>Expect:</b> the balance drops and the bill stays open &mdash; that is the payment plan."},
    {"id": "Q6", "who": "a", "t": "Escalate a <b>fine or tax</b> that is in collections.", "x": "<b>Expect:</b> status becomes <code>warrant</code> and <code>warrantFiled</code> fires for the lawman script."},
    {"id": "Q7", "who": "a", "gate": True, "t": "Look at an <b>invoice</b> row in the queue.", "x": "<b>Expect:</b> it has <b>no Escalate control at all</b>, and reads <em>civil debt &mdash; never a warrant</em>. Calling the export directly returns <code>ERR_CIVIL_DEBT</code>."},
+   {"id": "Q8", "who": "b", "gate": True, "t": "<b>Security regression.</b> As a collector, try to collect a debt from an account the <b>debtor does not own</b> &mdash; e.g. another player's account id:<pre class=\"sql\">exports.sov_bank:RecordCollection(billId, 100, {\n  collectorCharid = '&lt;collector&gt;', payWith = &lt;someone else's accountId&gt; })</pre>", "x": "<b>Expect:</b> <code>ERR_ACCESS</code> and <b>no money moves</b>. <i>An audit found this unguarded &mdash; a collector could name any account in the bank as the payment source and drain it under color of a real debt. The suite covers it too; this confirms it end to end.</i>"},
+   {"id": "Q9", "who": "b", "t": "Check the currency on a settled collection where the bill was denominated in gold.", "x": "<b>Expect:</b> the debt was settled in <b>gold</b>, not dollars. <i>Collections previously hardcoded dollars, letting a gold debt be discharged at a 20:1 discount.</i>"},
  ]},
  {"art": "III", "title": "Lawful Seizure", "tag": "the guardrails", "why":
   "The one place this resource authorises force. Every gate here matters more than any feature in the bank.",
