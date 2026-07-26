@@ -83,8 +83,8 @@ Config.Teller = {
   spawnPeds        = true,        -- spawn a teller ped at each branch
   -- Fallback when a branch sets no pedModel. Must be a model that exists in
   -- this build — an invalid name simply never loads, and the branch gets no
-  -- ped (logged once). This one is in use by sovereign_stores.
-  pedModel         = 'U_M_M_NbxGeneralStoreOwner_01',
+  -- ped (logged once).
+  pedModel         = 's_m_m_bankclerk_01',
   pedSpawnDistance = 60.0,        -- spawn/despawn distance for teller peds
 }
 

@@ -20,7 +20,7 @@ Config.Locations = {
       teller = vector3(-308.75, 775.3, 118.66), -- interaction point (counter)
       tellerHeading = 185.0,                    -- ped faces the customer
       tellerRange   = 2.5,
-      pedModel = 'U_M_M_NbxGeneralStoreOwner_01',
+      pedModel = 's_m_m_bankclerk_01',
       features = { transfers = true, sdb = true, gold = true, loans = true },
       -- reserve / rateOverrides used by later phases
       reserve = { cap = 250000 },
@@ -34,7 +34,7 @@ Config.Locations = {
       teller = vector3(1288.9, -1296.5, 77.04),
       tellerHeading = 315.0,
       tellerRange   = 2.5,
-      pedModel = 'U_M_M_NbxGeneralStoreOwner_01',
+      pedModel = 's_m_m_bankclerk_01',
       features = { transfers = true, sdb = true, gold = true, loans = true },
       reserve = { cap = 250000 },
     },
@@ -47,7 +47,7 @@ Config.Locations = {
       teller = vector3(2646.9, -1289.7, 52.25),
       tellerHeading = 280.0,
       tellerRange   = 2.5,
-      pedModel = 'U_M_M_NbxGeneralStoreOwner_01',
+      pedModel = 's_m_m_bankclerk_01',
       features = { transfers = true, sdb = true, gold = true, loans = true },
       reserve = { cap = 400000 }, -- city bank holds more (design Â§5.11)
     },
@@ -60,7 +60,7 @@ Config.Locations = {
       teller = vector3(-817.0, -1276.2, 43.68),
       tellerHeading = 280.0,
       tellerRange   = 2.5,
-      pedModel = 'U_M_M_NbxGeneralStoreOwner_01',
+      pedModel = 's_m_m_bankclerk_01',
       features = { transfers = true, sdb = true, gold = true, loans = true },
       reserve = { cap = 300000 },
     },
