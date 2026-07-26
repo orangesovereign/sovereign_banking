@@ -24,7 +24,7 @@ CREATE TABLE IF NOT EXISTS sov_bank_accounts (
   KEY idx_status (status)
 ) ENGINE=InnoDB AUTO_INCREMENT=1001 DEFAULT CHARSET=utf8mb4;
 -- ^ ids 1-1000 (and the account numbers branded from them) are reserved for
---   government/system accounts; organic accounts start at 1001.
+--   government and system accounts. Organic accounts start at 1001.
 
 CREATE TABLE IF NOT EXISTS sov_bank_access (
   id             INT UNSIGNED NOT NULL AUTO_INCREMENT,

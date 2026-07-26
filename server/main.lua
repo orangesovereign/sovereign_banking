@@ -19,27 +19,50 @@ end
 
 --- Execute sql/install.sql statement-by-statement. Every statement is
 --- CREATE TABLE IF NOT EXISTS, so re-running on every boot is safe.
+---
+--- Comments are stripped from the WHOLE file before splitting on ';'. Doing it
+--- the other way round means a semicolon inside a `--` comment splits the
+--- comment in two and the tail becomes the head of the next statement, which
+--- then fails to parse. A failure here is fatal to boot rather than a warning:
+--- a missing table is not something to discover later at a teller.
 local function ensureSchema()
   if Config.AutoRunSchema == false then return end
   local raw = LoadResourceFile(RESOURCE, 'sql/install.sql')
   if not raw then
     Log.warn('sql/install.sql not found — assuming schema was imported manually')
-    return
+    return true
   end
-  local count = 0
-  for stmt in raw:gmatch('[^;]+') do
-    local cleaned = stmt:gsub('%-%-[^\n]*', ''):gsub('^%s+', ''):gsub('%s+$', '')
+
+  local stripped = raw:gsub('%-%-[^\n]*', '')
+  local count, failed = 0, 0
+  for stmt in stripped:gmatch('[^;]+') do
+    local cleaned = stmt:gsub('^%s+', ''):gsub('%s+$', '')
     if #cleaned > 0 then
-      Db.query(cleaned)
       count = count + 1
+      if Db.query(cleaned) == nil then
+        failed = failed + 1
+        Log.error('schema statement %d failed: %s', count, cleaned:sub(1, 120))
+      end
     end
   end
+
+  if failed > 0 then
+    Log.error('SCHEMA INCOMPLETE — %d of %d statements failed. The bank will not start.',
+      failed, count)
+    return false
+  end
   Log.info('database schema ensured (%d statements)', count)
+  return true
 end
 
 CreateThread(function()
   waitForDb()
-  ensureSchema()
+  if not ensureSchema() then
+    -- Seeding accounts against a half-built schema would scatter partial state
+    -- that is harder to clean up than a refused boot.
+    Log.error('Sovereign Bank did NOT start. Fix the schema errors above and restart the resource.')
+    return
+  end
 
   -- Numbers 1–1000 are reserved for government accounts (Config.ReservedNumbers):
   -- push the id counter past the range so organic accounts brand from №1001.
@@ -48,6 +71,7 @@ CreateThread(function()
   Db.execute(('ALTER TABLE sov_bank_accounts AUTO_INCREMENT = %d'):format(floor))
 
   Accounts.ensureSystemAccounts()
+  Accounts.repairOwnerAccess()
   Society.ensureAccounts()
   Heist.ensureReserves()
   SDB.registerAll()

@@ -50,10 +50,17 @@ function Accounts.create(ownerType, ownerId, name, kind)
   Db.execute('UPDATE sov_bank_accounts SET account_number = ? WHERE id = ?', { number, id })
 
   if ownerType == Constants.OwnerType.CHARACTER then
-    Db.insert([[
+    -- The access row is what makes the account visible to its owner:
+    -- listForChar inner-joins on it, so an account without one holds money
+    -- nobody can reach through the teller. Failure is logged, and
+    -- repairOwnerAccess() backfills it on the next boot.
+    if Db.insert([[
       INSERT IGNORE INTO sov_bank_access (account_id, charidentifier, access_level, granted_by)
       VALUES (?, ?, 'owner', ?)
-    ]], { id, tostring(ownerId), tostring(ownerId) })
+    ]], { id, tostring(ownerId), tostring(ownerId) }) == nil then
+      Log.error('account %s created but its owner access row did not write — it will be invisible until repaired',
+        number)
+    end
   end
 
   Log.info('created account %s (%s/%s, kind=%s)', number, ownerType, tostring(ownerId), kind)
@@ -285,6 +292,28 @@ function Accounts.close(accountId, charid)
     Log.info('account %s closed by %s', acct.account_number, charid)
     return true, { closed = acct.id }
   end)
+end
+
+--- Backfill missing owner access rows (boot repair).
+---
+--- A character account whose access row failed to write is invisible to its
+--- owner while still holding money — `listForChar` inner-joins on that table.
+--- That can happen if the access table was missing or the insert errored, so
+--- rather than trusting it never happens, every boot re-asserts the invariant.
+--- Idempotent and cheap: it only touches rows that are actually missing.
+function Accounts.repairOwnerAccess()
+  local repaired = Db.execute([[
+    INSERT IGNORE INTO sov_bank_access (account_id, charidentifier, access_level, granted_by)
+    SELECT a.id, a.owner_id, 'owner', 'boot-repair'
+    FROM sov_bank_accounts a
+    LEFT JOIN sov_bank_access x
+      ON x.account_id = a.id AND x.charidentifier = a.owner_id
+    WHERE a.owner_type = 'character' AND a.status <> 'closed' AND x.id IS NULL
+  ]])
+  if repaired and repaired > 0 then
+    Log.warn('repaired %d account(s) that were missing their owner access row', repaired)
+  end
+  return repaired or 0
 end
 
 --- Idempotent first-boot seeding (tech spec §15.4). Government/system
