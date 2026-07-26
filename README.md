@@ -6,6 +6,7 @@ mobile ledgers, no cheques.
 
 **Design docs:** [`sovereign_bank_spec.md`](sovereign_bank_spec.md) (features) ·
 [`sovereign_bank_techspec.md`](sovereign_bank_techspec.md) (engineering).
+**Bringing it into service:** [`TESTING.md`](TESTING.md) — the testing ledger.
 
 > **Folder name matters:** other scripts call `exports.sov_bank:...`, so install
 > this resource as `sov_bank` (clone/rename the folder), not `sovereign_banking`.
