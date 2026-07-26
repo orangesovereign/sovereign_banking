@@ -1,13 +1,13 @@
 # Sovereign Bank — Testing Ledgers
 
-Testing for `sov_bank` lives in the county's interactive ledger format, the same
+Testing for `sovereign_banking` lives in the county's interactive ledger format, the same
 as `sovereign_medical` and `sovereign_stables`. Open the HTML files directly in a
 browser — each is self-contained, marks persist between visits, and the
 **Build the Report** button at the foot produces a block to paste back to Claude.
 
 | Ledger | Covers | Gate it closes |
 |--------|--------|----------------|
-| [B1 — Foundation](docs/testing/B1-FOUNDATION-LEDGER.html) | pre-flight, boot & schema, the `sovbanktest` money invariants, the counter, deposits & the wire, shared access, abuse pokes | **The counter may open to players** |
+| [B1 — Foundation](docs/testing/B1-FOUNDATION-LEDGER.html) | pre-flight, boot & schema, the `banking_test` money invariants, the counter, deposits & the wire, shared access, abuse pokes | **The counter may open to players** |
 | [B2 — Commerce & Credit](docs/testing/B2-COMMERCE-LEDGER.html) | bills, settlement & routing, the delinquency ladder, society funds & payroll, loans, savings interest, gold, deposit boxes | **Other scripts may issue debt and pay wages** |
 | [B3 — Enforcement & Ops](docs/testing/B3-ENFORCEMENT-LEDGER.html) | business tax ledger, collections queue, lawful seizure, the branch reserve guarantee, `/bankadmin`, the export contract, closing audit | **Heists may be enabled; the Tax Collector job may be handed out** |
 
@@ -26,6 +26,16 @@ names the layer that refused. Then press **Build the Report** and send it back.
 
 **Blockers** are marked in red. A failed blocker holds its gate shut; the report
 lists them explicitly at the bottom so nothing slips through.
+
+## Upgrading from the `sov_bank` naming
+
+The resource, its events, and its tables were renamed to `sovereign_banking_*`
+to match the rest of the county. If you booted an earlier build, the old tables
+are still in the database holding nothing of value — drop them once:
+
+```bash
+mysql -u root -p -e "SET @s := (SELECT IFNULL(CONCAT('DROP TABLE ', GROUP_CONCAT(table_name)), 'SELECT 1') FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name LIKE 'sov\_bank\_%'); PREPARE d FROM @s; EXECUTE d;" your_database
+```
 
 ## Before you start
 

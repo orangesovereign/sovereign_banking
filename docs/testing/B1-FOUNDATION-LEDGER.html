@@ -114,7 +114,7 @@
   <header class="masthead">
     <div class="over">~ Sovereign County Bank &mdash; Office of the Comptroller ~</div>
     <h1>B1 FOUNDATION LEDGER</h1>
-    <div class="sub">Boot, the money engine &amp; the counter — sov_bank v0.6.0</div>
+    <div class="sub">Boot, the money engine &amp; the counter — sovereign_banking v0.6.0</div>
     <p class="note">The first gate: the vault under everything else. Nothing in this resource has ever run against a live server &mdash; every line to date is syntax-checked and browser-tested against mock data, so treat all of it as unproven. Work with the <em>server console</em> and a <em>database window</em> open beside the game; each step's chip says where it happens. Mark every line <em>Pass</em>, <em>Fail</em> or <em>Skip</em>, note the <code>ERR_</code> code on any failure, then press <em>Build the Report</em> and paste it back. Marks persist between visits.</p>
     <div class="cast">
       <div class="who a"><b>IN GAME</b> &mdash; your character, at a bank counter</div>
@@ -162,15 +162,15 @@
             {
                 "id": "P1",
                 "who": "b",
-                "t": "Confirm <code>vorp_core</code>, <code>oxmysql</code> and <code>vorp_inventory</code> all start <b>before</b> <code>sov_bank</code> in your cfg.",
-                "x": "<b>Expect:</b> sov_bank appears after all three in the start order."
+                "t": "Confirm <code>vorp_core</code>, <code>oxmysql</code> and <code>vorp_inventory</code> all start <b>before</b> <code>sovereign_banking</code> in your cfg.",
+                "x": "<b>Expect:</b> sovereign_banking appears after all three in the start order."
             },
             {
                 "id": "P2",
                 "who": "b",
                 "gate": true,
-                "t": "Confirm the resource folder is named exactly <code>sov_bank</code> &mdash; not <code>sovereign_banking</code>.",
-                "x": "<b>Expect:</b> the folder name matches, or every <code>exports.sov_bank:&hellip;</code> call from other scripts will fail to resolve."
+                "t": "Confirm the resource folder is named exactly <code>sovereign_banking</code> &mdash; not <code>sovereign_banking</code>.",
+                "x": "<b>Expect:</b> the folder name matches, or every <code>exports.sovereign_banking:&hellip;</code> call from other scripts will fail to resolve."
             },
             {
                 "id": "P3",
@@ -181,7 +181,7 @@
             {
                 "id": "P4",
                 "who": "b",
-                "t": "Add <code>add_ace group.admin sovbank.admin allow</code> to <code>server.cfg</code> and reload it.",
+                "t": "Add <code>add_ace group.admin banking.admin allow</code> to <code>server.cfg</code> and reload it.",
                 "x": "<b>Expect:</b> no error. This is what lets you open <code>/bankadmin</code> later."
             },
             {
@@ -204,19 +204,19 @@
                 "who": "b",
                 "gate": true,
                 "t": "Start the resource and watch the console.",
-                "x": "<b>Expect:</b> <code>Sovereign Bank v0.6.0 ready</code>, and <b>no red lines</b> mentioning sov_bank."
+                "x": "<b>Expect:</b> <code>Sovereign Bank v0.6.0 ready</code>, and <b>no red lines</b> mentioning sovereign_banking."
             },
             {
                 "id": "S2",
                 "who": "b",
-                "t": "In the database: <code>SHOW TABLES LIKE 'sov_bank_%';</code>",
+                "t": "In the database: <code>SHOW TABLES LIKE 'sovereign_banking_%';</code>",
                 "x": "<b>Expect:</b> 11 tables &mdash; accounts, access, transactions, loans, savings_accrual, sdb, bills, business_tax, seizures, liens, reserves (plus meta)."
             },
             {
                 "id": "S3",
                 "who": "b",
                 "gate": true,
-                "t": "Check the standing accounts:<pre class=\"sql\">SELECT id, account_number, owner_id FROM sov_bank_accounts\nWHERE owner_type='system';</pre>",
+                "t": "Check the standing accounts:<pre class=\"sql\">SELECT id, account_number, owner_id FROM sovereign_banking_accounts\nWHERE owner_type='system';</pre>",
                 "x": "<b>Expect:</b> exactly two rows &mdash; <code>1 / SVB-0000001 / SYS-GOV</code> and <code>2 / SVB-0000002 / SYS-INSURANCE</code>."
             },
             {
@@ -228,14 +228,14 @@
             {
                 "id": "S5",
                 "who": "b",
-                "t": "<code>SELECT * FROM sov_bank_reserves;</code>",
+                "t": "<code>SELECT * FROM sovereign_banking_reserves;</code>",
                 "x": "<b>Expect:</b> one row per configured branch, each with <code>balance = cap</code>."
             },
             {
                 "id": "S6",
                 "who": "b",
                 "gate": true,
-                "t": "Log a character in, then run <code>sovbank account &lt;charid&gt;</code> in the console.",
+                "t": "Log a character in, then run <code>banking account &lt;charid&gt;</code> in the console.",
                 "x": "<b>Expect:</b> an account row whose number is <code>SVB-0001001</code> or higher. <b>If it is numbered below 1001</b>, the reserved-range ALTER did not apply &mdash; look for a SQL permission error at boot."
             },
             {
@@ -249,14 +249,14 @@
     {
         "art": "III",
         "title": "The Money Invariants",
-        "tag": "sovbanktest &middot; automated",
+        "tag": "banking_test &middot; automated",
         "why": "The suite proves the promises the whole bank rests on: money is conserved, nothing double-applies, and no race can overdraw an account.",
         "items": [
             {
                 "id": "M1",
                 "who": "b",
                 "gate": true,
-                "t": "With a player online, run in the <b>server console</b>: <code>sovbanktest &lt;theirServerId&gt;</code>",
+                "t": "With a player online, run in the <b>server console</b>: <code>banking_test &lt;theirServerId&gt;</code>",
                 "x": "<b>Expect:</b> a run of green PASS lines ending <code>suite done: N passed, 0 failed</code>. It creates throwaway accounts and deletes everything it made."
             },
             {
@@ -412,7 +412,7 @@
                 "id": "D6",
                 "who": "b",
                 "gate": true,
-                "t": "After D5: <code>SELECT balance_money FROM sov_bank_accounts WHERE id=2;</code>",
+                "t": "After D5: <code>SELECT balance_money FROM sovereign_banking_accounts WHERE id=2;</code>",
                 "x": "<b>Expect:</b> the insurance fund grew by <b>exactly the fee</b>. This is the money that pays for deposits being robbery-proof."
             },
             {
@@ -484,7 +484,7 @@
                 "id": "A8",
                 "who": "b",
                 "t": "After closing: check the ledger rows for that account id.",
-                "x": "<b>Expect:</b> the account is gone from the list but <b>its history remains</b> in <code>sov_bank_transactions</code>. The ledger is append-only."
+                "x": "<b>Expect:</b> the account is gone from the list but <b>its history remains</b> in <code>sovereign_banking_transactions</code>. The ledger is append-only."
             }
         ]
     },
@@ -528,7 +528,7 @@
         ]
     }
 ];
-  const KEY = 'sovbank-b1-foundation';
+  const KEY = 'banking-b1-foundation';
   const REPORT_TITLE = 'SOVEREIGN BANK — B1 Foundation Ledger — Results';
   const GATE_NOTE = 'the counter stays shut to players until these pass.';
 

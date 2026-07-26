@@ -78,7 +78,7 @@ function Seizure.authorizedBill(collectorCharid, debtorCharid)
   local row = Db.single([[
     SELECT *, UNIX_TIMESTAMP(due_at) AS due_epoch,
            UNIX_TIMESTAMP(created_at) AS created_epoch
-    FROM sov_bank_bills
+    FROM sovereign_banking_bills
     WHERE target_charid = ? AND status IN ('in_collections','warrant')
       AND balance_remaining > 0
     ORDER BY balance_remaining DESC LIMIT 1
@@ -192,7 +192,7 @@ function Seizure.seize(collectorCharid, debtorCharid, billId, itemList, opts)
       ('Seized goods sold — %s #%d'):format(fresh.kind, fresh.id), 140)
 
     local ok, res = Money.accountCredit(creditorId, currency, applied, {
-      category = Constants.Category.SEIZURE, memo = memoLine, source = 'sov_bank',
+      category = Constants.Category.SEIZURE, memo = memoLine, source = 'sovereign_banking',
     })
     if not ok then
       -- Goods are already gone. Nothing can un-take them, so record the loss
@@ -213,7 +213,7 @@ function Seizure.seize(collectorCharid, debtorCharid, billId, itemList, opts)
           commission, {
             category = Constants.Category.COMMISSION,
             memo = ('Seizure commission — bill #%d (%s)'):format(fresh.id, collectorCharid),
-            source = 'sov_bank',
+            source = 'sovereign_banking',
           })
         if not paid then commission = 0 end
       else
@@ -230,7 +230,7 @@ function Seizure.seize(collectorCharid, debtorCharid, billId, itemList, opts)
         local sok = Money.accountCredit(debtorAcct.id, currency, surplus, {
           category = Constants.Category.SEIZURE,
           memo = ('Surplus returned from seizure — bill #%d'):format(fresh.id),
-          source = 'sov_bank',
+          source = 'sovereign_banking',
         })
         if sok then surplusReturned = surplus end
       end
@@ -245,7 +245,7 @@ function Seizure.seize(collectorCharid, debtorCharid, billId, itemList, opts)
     local closed = newRemaining <= 0
     if closed then
       Db.execute([[
-        UPDATE sov_bank_bills SET balance_remaining = 0, status = 'paid', paid_at = NOW()
+        UPDATE sovereign_banking_bills SET balance_remaining = 0, status = 'paid', paid_at = NOW()
         WHERE id = ?
       ]], { fresh.id })
       Collections.releaseLiensForBill(fresh.id)
@@ -256,13 +256,13 @@ function Seizure.seize(collectorCharid, debtorCharid, billId, itemList, opts)
         wasWarrant = fresh.status == 'warrant',
       })
     else
-      Db.execute('UPDATE sov_bank_bills SET balance_remaining = ? WHERE id = ?',
+      Db.execute('UPDATE sovereign_banking_bills SET balance_remaining = ? WHERE id = ?',
         { newRemaining, fresh.id })
     end
 
     -- Audit row: itemized, permanent, disputable.
     Db.insert([[
-      INSERT INTO sov_bank_seizures
+      INSERT INTO sovereign_banking_seizures
         (bill_id, collector_charid, debtor_charid, items_json, assessed_value,
          applied_amount, surplus_returned)
       VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -299,7 +299,7 @@ end
 function Seizure.history(debtorCharid, limit)
   return Db.query([[
     SELECT *, UNIX_TIMESTAMP(created_at) AS created_epoch
-    FROM sov_bank_seizures WHERE debtor_charid = ?
+    FROM sovereign_banking_seizures WHERE debtor_charid = ?
     ORDER BY id DESC LIMIT ?
   ]], { tostring(debtorCharid), math.min(tonumber(limit) or 20, 50) }) or {}
 end

@@ -3,8 +3,8 @@
 
   THE GUARANTEE: a robbery can never debit, freeze, or reduce any character's
   or society's bank account. That is enforced structurally, not by config —
-  nothing in this file reads or writes sov_bank_accounts for a player. The
-  only pool it touches is sov_bank_reserves: the cash physically on hand in
+  nothing in this file reads or writes sovereign_banking_accounts for a player. The
+  only pool it touches is sovereign_banking_reserves: the cash physically on hand in
   a branch's vault and till, which is a wholly separate ledger of money.
 
   In-world, banked balances are government-insured (funded by the fees that
@@ -43,18 +43,18 @@ function Heist.getRow(branchId, currency)
 
   local row = Db.single([[
     SELECT *, UNIX_TIMESTAMP(last_refilled_at) AS refilled_epoch
-    FROM sov_bank_reserves WHERE branch_id = ? AND currency = ?
+    FROM sovereign_banking_reserves WHERE branch_id = ? AND currency = ?
   ]], { branch.id, currency })
   if row then return row end
 
   local cap = branchCap(branch)
   Db.execute([[
-    INSERT IGNORE INTO sov_bank_reserves (branch_id, currency, balance, cap, last_refilled_at)
+    INSERT IGNORE INTO sovereign_banking_reserves (branch_id, currency, balance, cap, last_refilled_at)
     VALUES (?, ?, ?, ?, NOW())
   ]], { branch.id, currency, cap, cap })
   return Db.single([[
     SELECT *, UNIX_TIMESTAMP(last_refilled_at) AS refilled_epoch
-    FROM sov_bank_reserves WHERE branch_id = ? AND currency = ?
+    FROM sovereign_banking_reserves WHERE branch_id = ? AND currency = ?
   ]], { branch.id, currency })
 end
 
@@ -106,7 +106,7 @@ function Heist.claim(branchId, currency, opts)
 
     -- Drain the till first: the money exists once, and only in the reserve.
     local affected = Db.execute([[
-      UPDATE sov_bank_reserves SET balance = balance - ?
+      UPDATE sovereign_banking_reserves SET balance = balance - ?
       WHERE branch_id = ? AND currency = ? AND balance >= ?
     ]], { looted, branch.id, currency, looted })
     if not affected or affected < 1 then return false, Err.INSUFFICIENT_FUNDS end
@@ -165,7 +165,7 @@ end
 function Heist.replenish()
   local hrs = tonumber(cfg().replenishRealHrs) or 48
   local rows = Db.query([[
-    SELECT branch_id, currency, balance, cap FROM sov_bank_reserves
+    SELECT branch_id, currency, balance, cap FROM sovereign_banking_reserves
     WHERE balance < cap
       AND (last_refilled_at IS NULL OR last_refilled_at < FROM_UNIXTIME(?))
     LIMIT 25
@@ -173,7 +173,7 @@ function Heist.replenish()
 
   for _, r in ipairs(rows) do
     Db.execute([[
-      UPDATE sov_bank_reserves SET balance = cap, last_refilled_at = NOW()
+      UPDATE sovereign_banking_reserves SET balance = cap, last_refilled_at = NOW()
       WHERE branch_id = ? AND currency = ?
     ]], { r.branch_id, r.currency })
     Log.info('reserve refilled: %s back to %s', r.branch_id, tostring(r.cap))
@@ -189,7 +189,7 @@ function Heist.ensureReserves()
     local cap = branchCap(branch)
     if row and tonumber(row.cap) ~= cap then
       Db.execute([[
-        UPDATE sov_bank_reserves SET cap = ?, balance = LEAST(balance, ?)
+        UPDATE sovereign_banking_reserves SET cap = ?, balance = LEAST(balance, ?)
         WHERE branch_id = ? AND currency = ?
       ]], { cap, cap, branch.id, Constants.Currency.MONEY })
       Log.info('reserve cap for %s set to %s', branch.id, cap)
@@ -202,6 +202,6 @@ function Heist.report()
   return Db.query([[
     SELECT branch_id, currency, balance, cap,
            UNIX_TIMESTAMP(last_refilled_at) AS refilled_epoch
-    FROM sov_bank_reserves ORDER BY branch_id ASC
+    FROM sovereign_banking_reserves ORDER BY branch_id ASC
   ]]) or {}
 end

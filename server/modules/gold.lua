@@ -42,7 +42,7 @@ function Gold.exchange(charid, direction, goldMinor, meta)
   if not Util.isValidAmount(goldMinor) then return false, Err.BAD_AMOUNT end
 
   local q = Gold.quote()
-  local source = meta.source or 'sov_bank'
+  local source = meta.source or 'sovereign_banking'
 
   if direction == 'buy' then
     local cost = moneyFor(goldMinor, q.buy)
@@ -55,7 +55,7 @@ function Gold.exchange(charid, direction, goldMinor, meta)
       { category = Constants.Category.GOLD_EXCHANGE, memo = memo, source = source, silent = true })
     if not ok2 then
       Money.walletCredit(charid, Constants.Currency.MONEY, cost, {
-        category = Constants.Category.COMPENSATION, source = 'sov_bank',
+        category = Constants.Category.COMPENSATION, source = 'sovereign_banking',
         memo = ('reversal: %s'):format(memo), silent = true,
       })
       return false, res2
@@ -74,7 +74,7 @@ function Gold.exchange(charid, direction, goldMinor, meta)
       { category = Constants.Category.GOLD_EXCHANGE, memo = memo, source = source, silent = true })
     if not ok2 then
       Money.walletCredit(charid, Constants.Currency.GOLD, goldMinor, {
-        category = Constants.Category.COMPENSATION, source = 'sov_bank',
+        category = Constants.Category.COMPENSATION, source = 'sovereign_banking',
         memo = ('reversal: %s'):format(memo), silent = true,
       })
       return false, res2

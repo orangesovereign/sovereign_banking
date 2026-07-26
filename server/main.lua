@@ -68,7 +68,7 @@ CreateThread(function()
   -- push the id counter past the range so organic accounts brand from №1001.
   -- Safe to run every boot — MySQL never lowers the counter below the current max.
   local floor = ((Config.ReservedNumbers and Config.ReservedNumbers.max) or 1000) + 1
-  Db.execute(('ALTER TABLE sov_bank_accounts AUTO_INCREMENT = %d'):format(floor))
+  Db.execute(('ALTER TABLE sovereign_banking_accounts AUTO_INCREMENT = %d'):format(floor))
 
   Accounts.ensureSystemAccounts()
   Accounts.repairOwnerAccess()
@@ -102,7 +102,7 @@ end)
 -- Console diagnostics (server console only; /bankadmin panel lands Phase 4)
 -- ============================================================================
 
-RegisterCommand('sovbank', function(source, args)
+RegisterCommand('banking', function(source, args)
   if source ~= 0 then return end -- server console only
   local sub = args[1]
 
@@ -129,6 +129,6 @@ RegisterCommand('sovbank', function(source, args)
       print(#rows == 0 and 'no pending loan applications' or json.encode(rows))
     end
   else
-    print('usage: sovbank reconcile <accountId> | sovbank account <charid> | sovbank tx <accountId> [limit] | sovbank loans [approve|deny <loanId>]')
+    print('usage: banking reconcile <accountId> | banking account <charid> | banking tx <accountId> [limit] | banking loans [approve|deny <loanId>]')
   end
 end, true)

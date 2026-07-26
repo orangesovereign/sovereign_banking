@@ -31,7 +31,7 @@ function Ledger.write(e)
   add('memo', Util.truncate(e.memo, 140))
 
   return Db.insert(
-    ('INSERT INTO sov_bank_transactions (%s) VALUES (%s)')
+    ('INSERT INTO sovereign_banking_transactions (%s) VALUES (%s)')
       :format(table.concat(cols, ', '), table.concat(marks, ', ')),
     vals
   )
@@ -40,7 +40,7 @@ end
 --- Idempotency lookup (tech spec §5.3).
 function Ledger.findByUuid(uuid)
   if not uuid then return nil end
-  return Db.single('SELECT * FROM sov_bank_transactions WHERE tx_uuid = ?', { uuid })
+  return Db.single('SELECT * FROM sovereign_banking_transactions WHERE tx_uuid = ?', { uuid })
 end
 
 --- Statement query (design §5.9). opts: limit, offset, category, currency,
@@ -75,7 +75,7 @@ function Ledger.getTransactions(accountId, opts)
     SELECT id, tx_uuid, account_id, counterparty_account_id, currency, direction,
            amount, balance_after, category, source_resource, memo,
            UNIX_TIMESTAMP(created_at) AS created_at
-    FROM sov_bank_transactions
+    FROM sovereign_banking_transactions
     WHERE %s
     ORDER BY id DESC
     LIMIT ? OFFSET ?
@@ -102,7 +102,7 @@ function Ledger.countTransactions(accountId, opts)
   where('created_at < FROM_UNIXTIME(?)', opts.before and tonumber(opts.before) or nil)
 
   return tonumber(Db.scalar(
-    ('SELECT COUNT(*) FROM sov_bank_transactions WHERE %s'):format(table.concat(conds, ' AND ')),
+    ('SELECT COUNT(*) FROM sovereign_banking_transactions WHERE %s'):format(table.concat(conds, ' AND ')),
     vals)) or 0
 end
 
@@ -124,13 +124,13 @@ end
 
 --- The comparison itself. Call this only while holding 'acct:<id>'.
 function Ledger.reconcileUnlocked(accountId)
-  local acct = Db.single('SELECT * FROM sov_bank_accounts WHERE id = ?', { accountId })
+  local acct = Db.single('SELECT * FROM sovereign_banking_accounts WHERE id = ?', { accountId })
   if not acct then return nil end
 
   local sums = Db.query([[
     SELECT currency,
            COALESCE(SUM(CASE WHEN direction = 'credit' THEN amount ELSE -amount END), 0) AS total
-    FROM sov_bank_transactions
+    FROM sovereign_banking_transactions
     WHERE account_id = ?
     GROUP BY currency
   ]], { accountId }) or {}

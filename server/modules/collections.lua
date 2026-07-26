@@ -74,7 +74,7 @@ function Collections.queue(filterOpts)
     SELECT *, UNIX_TIMESTAMP(due_at) AS due_epoch,
            UNIX_TIMESTAMP(created_at) AS created_epoch,
            DATEDIFF(NOW(), due_at) AS days_overdue
-    FROM sov_bank_bills WHERE %s
+    FROM sovereign_banking_bills WHERE %s
     ORDER BY due_at ASC LIMIT ?
   ]]):format(table.concat(conds, ' AND ')), vals) or {}
 end
@@ -87,7 +87,7 @@ function Collections.assign(billId, collectorCharid)
     local bill = Billing.get(billId)
     if not bill then return false, Err.NO_BILL end
     if bill.status ~= 'in_collections' then return false, Err.NOT_IN_COLLECTIONS end
-    Db.execute('UPDATE sov_bank_bills SET assigned_collector = ? WHERE id = ?',
+    Db.execute('UPDATE sovereign_banking_bills SET assigned_collector = ? WHERE id = ?',
       { tostring(collectorCharid), bill.id })
     return true, { billId = bill.id }
   end)
@@ -124,7 +124,7 @@ local function payCommission(amount, creditorId, bill, collectorCharid, currency
   local ok = Money.transfer(creditorId, socAcct.id, currency or Constants.Currency.MONEY, commission, {
     category = Constants.Category.COMMISSION,
     memo = ('Collection commission — bill #%d (%s)'):format(bill.id, tostring(collectorCharid)),
-    source = 'sov_bank',
+    source = 'sovereign_banking',
   })
   if not ok then
     Log.warn('bill #%d: commission of %s could not be paid', bill.id, commission)
@@ -172,7 +172,7 @@ function Collections.record(billId, collectorCharid, amount, payWith, meta)
         { category = Constants.Category.COLLECTION, memo = memoLine, source = meta.source })
       if not ok2 then
         local backOk = Money.walletCredit(bill.target_charid, currency, toPay, {
-          category = Constants.Category.COMPENSATION, source = 'sov_bank',
+          category = Constants.Category.COMPENSATION, source = 'sovereign_banking',
           memo = ('reversal: %s'):format(memoLine), silent = true,
         })
         if not backOk then
@@ -203,7 +203,7 @@ function Collections.record(billId, collectorCharid, amount, payWith, meta)
     local closed = newRemaining <= 0
     if closed then
       Db.execute([[
-        UPDATE sov_bank_bills SET balance_remaining = 0, status = 'paid', paid_at = NOW()
+        UPDATE sovereign_banking_bills SET balance_remaining = 0, status = 'paid', paid_at = NOW()
         WHERE id = ?
       ]], { bill.id })
       Collections.releaseLiensForBill(bill.id)
@@ -214,7 +214,7 @@ function Collections.record(billId, collectorCharid, amount, payWith, meta)
         wasWarrant = bill.status == 'warrant',
       })
     else
-      Db.execute('UPDATE sov_bank_bills SET balance_remaining = ? WHERE id = ?',
+      Db.execute('UPDATE sovereign_banking_bills SET balance_remaining = ? WHERE id = ?',
         { newRemaining, bill.id })
     end
 
@@ -251,10 +251,10 @@ function Collections.placeLien(debtorCharid, accountId, amount, opts)
   add('account_id', accountId and tonumber(accountId) or nil)
   add('debtor_charid', tostring(debtorCharid))
   add('amount', amount)
-  add('placed_by', tostring(opts.collectorCharid or 'sov_bank'))
+  add('placed_by', tostring(opts.collectorCharid or 'sovereign_banking'))
 
   local id = Db.insert(
-    ('INSERT INTO sov_bank_liens (%s) VALUES (%s)')
+    ('INSERT INTO sovereign_banking_liens (%s) VALUES (%s)')
       :format(table.concat(cols, ', '), table.concat(marks, ', ')), vals)
   if not id then return false, Err.INTERNAL end
   Log.info('lien #%d placed on %s for %s', id, tostring(debtorCharid), amount)
@@ -265,7 +265,7 @@ function Collections.releaseLien(lienId, status)
   lienId = tonumber(lienId)
   if not lienId then return false, Err.NO_LIEN end
   local affected = Db.execute([[
-    UPDATE sov_bank_liens SET status = ?, released_at = NOW()
+    UPDATE sovereign_banking_liens SET status = ?, released_at = NOW()
     WHERE id = ? AND status = 'active'
   ]], { status or 'released', lienId })
   if not affected or affected < 1 then return false, Err.NO_LIEN end
@@ -274,7 +274,7 @@ end
 
 function Collections.releaseLiensForBill(billId)
   Db.execute([[
-    UPDATE sov_bank_liens SET status = 'satisfied', released_at = NOW()
+    UPDATE sovereign_banking_liens SET status = 'satisfied', released_at = NOW()
     WHERE bill_id = ? AND status = 'active'
   ]], { tonumber(billId) })
 end
@@ -282,7 +282,7 @@ end
 function Collections.listLiens(debtorCharid)
   return Db.query([[
     SELECT *, UNIX_TIMESTAMP(created_at) AS created_epoch
-    FROM sov_bank_liens WHERE debtor_charid = ? AND status = 'active'
+    FROM sovereign_banking_liens WHERE debtor_charid = ? AND status = 'active'
     ORDER BY id DESC LIMIT 25
   ]], { tostring(debtorCharid) }) or {}
 end
@@ -347,7 +347,7 @@ function Collections.escalate(billId, collectorCharid)
     end
     if bill.status ~= 'in_collections' then return false, Err.NOT_IN_COLLECTIONS end
 
-    Db.execute("UPDATE sov_bank_bills SET status = 'warrant' WHERE id = ?", { bill.id })
+    Db.execute("UPDATE sovereign_banking_bills SET status = 'warrant' WHERE id = ?", { bill.id })
     Log.warn('bill #%d escalated to WARRANT by collector %s',
       bill.id, tostring(collectorCharid))
     Events.warrantFiled({

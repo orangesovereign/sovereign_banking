@@ -126,7 +126,7 @@ both sides consistent.
 All tables use `charIdentifier` (VORP's stable character key) as the owning key,
 never the fleeting `source`.
 
-### `sov_bank_accounts`
+### `sovereign_banking_accounts`
 | Column | Type | Notes |
 |--------|------|-------|
 | id | INT PK AI | Internal account id |
@@ -142,7 +142,7 @@ never the fleeting `source`.
 | credit_limit | BIGINT default 0 | Overdraft/credit allowance (feature-gated) |
 | created_at / updated_at | TIMESTAMP | |
 
-### `sov_bank_access`
+### `sovereign_banking_access`
 Shared-account permissions (gangs, families, businesses, factions).
 | Column | Type | Notes |
 |--------|------|-------|
@@ -153,7 +153,7 @@ Shared-account permissions (gangs, families, businesses, factions).
 | granted_by | VARCHAR(64) | |
 | created_at | TIMESTAMP | |
 
-### `sov_bank_transactions` (the ledger — append-only)
+### `sovereign_banking_transactions` (the ledger — append-only)
 | Column | Type | Notes |
 |--------|------|-------|
 | id | BIGINT PK AI | |
@@ -169,7 +169,7 @@ Shared-account permissions (gangs, families, businesses, factions).
 | memo | VARCHAR(140) | Human note / statement line |
 | created_at | TIMESTAMP | Indexed |
 
-### `sov_bank_loans`
+### `sovereign_banking_loans`
 Fixed-cost loans (see §5.3 — total owed is set at origination; no compounding).
 | Column | Type | Notes |
 |--------|------|-------|
@@ -185,7 +185,7 @@ Fixed-cost loans (see §5.3 — total owed is set at origination; no compounding
 | approved_by | VARCHAR(64) NULL | Teller/admin |
 | created_at / updated_at | TIMESTAMP | |
 
-### `sov_bank_sdb` (safety deposit boxes)
+### `sovereign_banking_sdb` (safety deposit boxes)
 Box metadata; contents live in VORP Inventory as a stash keyed to the box id.
 | Column | Type | Notes |
 |--------|------|-------|
@@ -197,14 +197,14 @@ Box metadata; contents live in VORP Inventory as a stash keyed to the box id.
 | rent_paid_until | DATETIME NULL | Real-life date, for rental model |
 | created_at | TIMESTAMP | |
 
-### `sov_bank_savings_accrual`
+### `sovereign_banking_savings_accrual`
 Tracks last interest posting per savings account (real-life dates — see §5.4).
 | Column | Type | Notes |
 |--------|------|-------|
 | account_id | INT FK PK | |
 | last_accrued_at | DATETIME | Real-life timestamp of last interest run |
 
-### `sov_bank_bills` (invoices, fines, taxes — no cheques)
+### `sovereign_banking_bills` (invoices, fines, taxes — no cheques)
 | Column | Type | Notes |
 |--------|------|-------|
 | id | INT PK AI | |
@@ -222,7 +222,7 @@ Tracks last interest posting per savings account (real-life dates — see §5.4)
 | memo | VARCHAR(140) | |
 | created_at / paid_at | TIMESTAMP | |
 
-### `sov_bank_business_tax` (Tax Ledger per business — §5.15)
+### `sovereign_banking_business_tax` (Tax Ledger per business — §5.15)
 Owned by the bank; the running tax record for a `sovereign_stores` business.
 | Column | Type | Notes |
 |--------|------|-------|
@@ -235,10 +235,10 @@ Owned by the bank; the running tax record for a `sovereign_stores` business.
 | last_remit_at | DATETIME NULL | |
 | next_due_at | DATETIME NULL | Remittance due date; past it → govt debt (§5.14) |
 
-(Individual assessments/remittances also post to `sov_bank_transactions` with
+(Individual assessments/remittances also post to `sovereign_banking_transactions` with
 `category` in `tax_assessed` / `tax_remit` for a full audit trail.)
 
-### `sov_bank_seizures` (audit log for lawful seizures — §5.14)
+### `sovereign_banking_seizures` (audit log for lawful seizures — §5.14)
 | Column | Type | Notes |
 |--------|------|-------|
 | id | INT PK AI | |
@@ -251,7 +251,7 @@ Owned by the bank; the running tax record for a `sovereign_stores` business.
 | surplus_returned | BIGINT | Overage handed back to debtor |
 | created_at | TIMESTAMP | |
 
-### `sov_bank_config_rates` (optional, live-editable)
+### `sovereign_banking_config_rates` (optional, live-editable)
 Per-branch interest rates, fees, and exchange rates, editable via admin panel
 without a restart.
 
@@ -514,7 +514,7 @@ store script.
     keep, making the fee a progressive money sink and a genuine consideration
     before buying an expensive property.
 - **The Tax Ledger belongs to the bank.** Each business has a Tax Ledger
-  (`sov_bank_business_tax`) that the bank owns and displays at the teller. It
+  (`sovereign_banking_business_tax`) that the bank owns and displays at the teller. It
   tracks the flat business tax assessed, tax remitted, and the outstanding balance
   owed.
 - **Assessment:** each period the bank assesses `licenseRate × building_price`
@@ -550,54 +550,54 @@ needing a reply.
 
 ```lua
 -- ADD money to a character (wallet or bank). Returns bool ok, string txId|err.
-exports['sov_bank']:AddMoney(charid, currency, amount, opts)
+exports['sovereign_banking']:AddMoney(charid, currency, amount, opts)
 -- REMOVE money. Fails cleanly (returns false) if insufficient funds.
-exports['sov_bank']:RemoveMoney(charid, currency, amount, opts)
+exports['sovereign_banking']:RemoveMoney(charid, currency, amount, opts)
 -- Can this char afford it? (no mutation)
-exports['sov_bank']:CanAfford(charid, currency, amount, opts)
+exports['sovereign_banking']:CanAfford(charid, currency, amount, opts)
 -- Read balances.
-exports['sov_bank']:GetWalletBalance(charid, currency)
-exports['sov_bank']:GetBankBalance(accountId, currency)
-exports['sov_bank']:GetPrimaryAccount(charid)
+exports['sovereign_banking']:GetWalletBalance(charid, currency)
+exports['sovereign_banking']:GetBankBalance(accountId, currency)
+exports['sovereign_banking']:GetPrimaryAccount(charid)
 -- Move money between two accounts atomically.
-exports['sov_bank']:Transfer(fromAccountId, toAccountId, currency, amount, opts)
+exports['sovereign_banking']:Transfer(fromAccountId, toAccountId, currency, amount, opts)
 -- Society / faction helpers (law, medical, businesses, gangs).
-exports['sov_bank']:AddToSociety(society, currency, amount, opts)
-exports['sov_bank']:RemoveFromSociety(society, currency, amount, opts)
-exports['sov_bank']:GetSocietyBalance(society, currency)
-exports['sov_bank']:RunPayroll(society, payrollTable, opts)   -- batch, atomic
+exports['sovereign_banking']:AddToSociety(society, currency, amount, opts)
+exports['sovereign_banking']:RemoveFromSociety(society, currency, amount, opts)
+exports['sovereign_banking']:GetSocietyBalance(society, currency)
+exports['sovereign_banking']:RunPayroll(society, payrollTable, opts)   -- batch, atomic
 -- Invoices, fines & taxes.
-exports['sov_bank']:IssueInvoice(issuer, targetCharid, currency, amount, memo) -- civil
-exports['sov_bank']:IssueFine(targetCharid, currency, amount, memo, opts)  -- called by lawman
-exports['sov_bank']:LevyTax(targetCharid, currency, amount, memo, opts)    -- called by Tax Office
+exports['sovereign_banking']:IssueInvoice(issuer, targetCharid, currency, amount, memo) -- civil
+exports['sovereign_banking']:IssueFine(targetCharid, currency, amount, memo, opts)  -- called by lawman
+exports['sovereign_banking']:LevyTax(targetCharid, currency, amount, memo, opts)    -- called by Tax Office
 -- Collections pipeline (§5.14). Read/act on delinquent debt.
-exports['sov_bank']:GetCollectionsQueue(filterOpts)          -- Tax Collector view
-exports['sov_bank']:RecordCollection(billId, amount, opts)   -- on-the-spot / payment plan
-exports['sov_bank']:PlaceLien(targetCharid, accountId, amount, opts)
-exports['sov_bank']:EscalateToLawman(billId, opts)           -- govt debt only; files warrant
-exports['sov_bank']:GetDebtStatus(charid)                    -- what a char owes, by tier
+exports['sovereign_banking']:GetCollectionsQueue(filterOpts)          -- Tax Collector view
+exports['sovereign_banking']:RecordCollection(billId, amount, opts)   -- on-the-spot / payment plan
+exports['sovereign_banking']:PlaceLien(targetCharid, accountId, amount, opts)
+exports['sovereign_banking']:EscalateToLawman(billId, opts)           -- govt debt only; files warrant
+exports['sovereign_banking']:GetDebtStatus(charid)                    -- what a char owes, by tier
 -- Collection encounter & lawful seizure (§5.14). Server verifies a valid debt.
-exports['sov_bank']:StartEscort(collectorId, debtorId, billId) -- flag "accompany to bank"
-exports['sov_bank']:ValuateItems(itemList)                   -- assessed sale value of goods
-exports['sov_bank']:SeizeAssets(collectorId, debtorId, billId, itemList, opts)
+exports['sovereign_banking']:StartEscort(collectorId, debtorId, billId) -- flag "accompany to bank"
+exports['sovereign_banking']:ValuateItems(itemList)                   -- assessed sale value of goods
+exports['sovereign_banking']:SeizeAssets(collectorId, debtorId, billId, itemList, opts)
 -- ^ verifies open tier-2 debt, caps to owed+fees, sells goods, applies proceeds,
 --   returns surplus, logs everything. Returns (ok, {applied, surplus, shortfall}).
-exports['sov_bank']:IsSeizureAuthorized(collectorId, debtorId) -- guard for restraint script
+exports['sovereign_banking']:IsSeizureAuthorized(collectorId, debtorId) -- guard for restraint script
 -- Loans.
-exports['sov_bank']:CreateLoan(charid, principal, rate, opts)
+exports['sovereign_banking']:CreateLoan(charid, principal, rate, opts)
 -- Heist/robbery: collect a branch's physical cash reserve. NEVER touches player
 -- balances. Returns (ok, amountLooted|err); auto-caps to available reserve.
-exports['sov_bank']:GetBranchReserve(branchId, currency)
-exports['sov_bank']:ClaimBranchReserve(branchId, currency, opts)
+exports['sovereign_banking']:GetBranchReserve(branchId, currency)
+exports['sovereign_banking']:ClaimBranchReserve(branchId, currency, opts)
 -- Business accounts & Tax Ledger (§5.15 — sovereign_stores).
-exports['sov_bank']:GetBusinessAccount(business)             -- account(s) for a business
-exports['sov_bank']:RegisterBusiness(business, ownerCharid, buildingPrice, opts) -- set tax basis on purchase
-exports['sov_bank']:AssessBusinessTax(business, opts)        -- assess licenseRate × building_price (NO sales tax)
-exports['sov_bank']:GetTaxLedger(business)                   -- assessed/remitted/owed/due
-exports['sov_bank']:RemitTax(business, amount, opts)         -- owner settles at the bank
-exports['sov_bank']:IsBusinessOwner(charid, business)        -- whitelist/access check
+exports['sovereign_banking']:GetBusinessAccount(business)             -- account(s) for a business
+exports['sovereign_banking']:RegisterBusiness(business, ownerCharid, buildingPrice, opts) -- set tax basis on purchase
+exports['sovereign_banking']:AssessBusinessTax(business, opts)        -- assess licenseRate × building_price (NO sales tax)
+exports['sovereign_banking']:GetTaxLedger(business)                   -- assessed/remitted/owed/due
+exports['sovereign_banking']:RemitTax(business, amount, opts)         -- owner settles at the bank
+exports['sovereign_banking']:IsBusinessOwner(charid, business)        -- whitelist/access check
 -- Read-only ledger query for other scripts / dashboards.
-exports['sov_bank']:GetTransactions(accountId, filterOpts)
+exports['sovereign_banking']:GetTransactions(accountId, filterOpts)
 ```
 
 **The `opts` table** (shared across mutating calls) is where robustness lives:
@@ -627,22 +627,22 @@ throws — so callers can branch safely.
 ### 6.2 Events (fire-and-forget + broadcast)
 
 **Inbound (other scripts → bank):** thin event wrappers over the exports, for
-resources that prefer events. e.g. `TriggerEvent('sov_bank:server:addMoney', ...)`.
+resources that prefer events. e.g. `TriggerEvent('sovereign_banking:server:addMoney', ...)`.
 
 **Outbound (bank → everyone, for reactions):** the bank *announces* what it did so
 other systems can react without polling.
 
 ```lua
-'sov_bank:server:transactionCompleted'   -- {charid, accountId, currency, amount, direction, category, txId}
-'sov_bank:server:balanceChanged'         -- {charid, accountId, currency, newBalance}
-'sov_bank:server:loanDefaulted'          -- {charid, loanId}
-'sov_bank:server:accountFrozen'          -- {accountId, by}
-'sov_bank:server:billPaid'               -- {billId, payerCharid, issuerId, amount, kind}
-'sov_bank:server:debtOverdue'            -- {charid, billId, kind, amount}  (tier 1)
-'sov_bank:server:debtInCollections'      -- {charid, billId, kind, amount}  (tier 2)
-'sov_bank:server:warrantFiled'           -- {charid, billId, kind, amount, reason} (tier 3, govt only)
-'sov_bank:server:assetsSeized'           -- {collectorId, debtorId, billId, items, applied, surplus}
-'sov_bank:client:notify'                 -- push a UI notification to a player
+'sovereign_banking:server:transactionCompleted'   -- {charid, accountId, currency, amount, direction, category, txId}
+'sovereign_banking:server:balanceChanged'         -- {charid, accountId, currency, newBalance}
+'sovereign_banking:server:loanDefaulted'          -- {charid, loanId}
+'sovereign_banking:server:accountFrozen'          -- {accountId, by}
+'sovereign_banking:server:billPaid'               -- {billId, payerCharid, issuerId, amount, kind}
+'sovereign_banking:server:debtOverdue'            -- {charid, billId, kind, amount}  (tier 1)
+'sovereign_banking:server:debtInCollections'      -- {charid, billId, kind, amount}  (tier 2)
+'sovereign_banking:server:warrantFiled'           -- {charid, billId, kind, amount, reason} (tier 3, govt only)
+'sovereign_banking:server:assetsSeized'           -- {collectorId, debtorId, billId, items, applied, surplus}
+'sovereign_banking:client:notify'                 -- push a UI notification to a player
 ```
 
 ### 6.3 VORP callbacks (client → server with reply)
@@ -652,11 +652,11 @@ gated server-side by a proximity check to a valid branch (§5.9–5.10):
 
 ```lua
 -- registered server-side
-Core.Callback.Register('sov_bank:getAccounts', function(source, cb, ...) end)
-Core.Callback.Register('sov_bank:withdraw',    function(source, cb, ...) end)
-Core.Callback.Register('sov_bank:transfer',    function(source, cb, ...) end)
+Core.Callback.Register('sovereign_banking:getAccounts', function(source, cb, ...) end)
+Core.Callback.Register('sovereign_banking:withdraw',    function(source, cb, ...) end)
+Core.Callback.Register('sovereign_banking:transfer',    function(source, cb, ...) end)
 -- called client-side (only when the player is at a teller)
-Core.Callback.TriggerAsync('sov_bank:getAccounts', function(result) ... end)
+Core.Callback.TriggerAsync('sovereign_banking:getAccounts', function(result) ... end)
 ```
 
 ### 6.4 Lawman integration (warrants from delinquent government debt)
@@ -668,12 +668,12 @@ meet at exactly one handoff — the warrant:
   are not involved and receive nothing during these tiers.
 - When a **government** debt crosses the arrestable threshold (or a Tax Collector
   calls `EscalateToLawman`), the bank files a warrant and fires
-  `sov_bank:server:warrantFiled` — {charid, billId, kind, amount, reason}. This is
+  `sovereign_banking:server:warrantFiled` — {charid, billId, kind, amount, reason}. This is
   the *only* moment a debt reaches the lawman script.
 - The lawman script picks up the warrant as one of its work sources (among many),
   and owns everything after: pursuit, arrest, jail, booking.
 - When the debt is paid (at a teller, via auto-debit at booking, or written off),
-  the bank fires `sov_bank:server:billPaid`; the lawman script listens and clears
+  the bank fires `sovereign_banking:server:billPaid`; the lawman script listens and clears
   the warrant on its side.
 - **Private invoices never fire `warrantFiled`** — they are civil and cannot reach
   the lawman tier (§5.14 hard rule).
@@ -903,7 +903,7 @@ script can depend on the exports before the teller UI is even finished.
   `licenseRate × building purchase price`, default **25%** (§5.15).
 - Bank captures the **building purchase price** as the tax basis when the property
   is bought (purchase routes through the bank); new export `RegisterBusiness`.
-- Added `building_price` and `license_rate` to `sov_bank_business_tax`; updated
+- Added `building_price` and `license_rate` to `sovereign_banking_business_tax`; updated
   `AssessBusinessTax` (now computes from basis) and `Config.BusinessTax.licenseRate`.
 
 **v2.5 (no sales tax):**
@@ -918,7 +918,7 @@ script can depend on the exports before the teller UI is even finished.
 - Added §5.15: **business accounts live under the bank** (`owner_type='business'`),
   accessed by whitelisted shop owners/employees at the teller — place-based, same
   as personal banking.
-- Moved the **Tax Ledger under the bank** (`sov_bank_business_tax` table): the bank
+- Moved the **Tax Ledger under the bank** (`sovereign_banking_business_tax` table): the bank
   owns the record and the money. Exports `GetBusinessAccount`, `GetTaxLedger`,
   `RemitTax`, `IsBusinessOwner`; `Config.BusinessTax`.
 - **Unremitted business tax → government debt** feeding the §5.14 collections
@@ -934,7 +934,7 @@ script can depend on the exports before the teller UI is even finished.
 - Added **lawful seizure → repayment**: seized valuables valued, "sold", proceeds
   applied to the debt; capped at owed+fees; surplus returned; shortfall persists
   (and can feed tier 3 for govt debt). Exempt-item list; full audit trail.
-- New `sov_bank_seizures` table; exports `StartEscort`, `ValuateItems`,
+- New `sovereign_banking_seizures` table; exports `StartEscort`, `ValuateItems`,
   `SeizeAssets`, `IsSeizureAuthorized`; event `assetsSeized`; `Config.Collections.
   seizure` block. Restraint (rope/hogtie) delegated to the existing restraint
   resource; bank only authorizes the debt-tied seizure.
@@ -951,7 +951,7 @@ script can depend on the exports before the teller UI is even finished.
   `warrantFiled`/`debtOverdue`/`debtInCollections` events and collections exports
   (`GetCollectionsQueue`, `RecordCollection`, `PlaceLien`, `EscalateToLawman`,
   `GetDebtStatus`).
-- Extended `sov_bank_bills` schema for tiers (status enum, due_at, collector,
+- Extended `sovereign_banking_bills` schema for tiers (status enum, due_at, collector,
   balance_remaining). Arrestable threshold left as configurable TBD (§12.5).
 
 **v2.1 (robbery & society ownership resolved):**
@@ -971,10 +971,10 @@ script can depend on the exports before the teller UI is even finished.
 - **Removed ATMs** (§5.10) — tellers/branches only.
 - **Removed mobile/pocket ledger** (§5.9) — all banking is in person at a branch;
   added server-side proximity gating (§7.5, §6.3).
-- **Removed cheques** (§5.7); `sov_bank_bills.kind` enum reduced to
+- **Removed cheques** (§5.7); `sovereign_banking_bills.kind` enum reduced to
   invoice/fine/tax.
 - **Interest is savings-only and accrues on real-life days** (§5.4); added
-  `sov_bank_savings_accrual` table and `Config.Interest.savingsOnly/accrualRealDays`.
+  `sovereign_banking_savings_accrual` table and `Config.Interest.savingsOnly/accrualRealDays`.
 - **Loans reworked to fixed-cost** (interest applied once at origination); schema
   updated with `total_due`/`interest_flat`; **credit made a master toggle**
   (`Config.Credit.enabled`).

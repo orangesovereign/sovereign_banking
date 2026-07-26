@@ -11,7 +11,7 @@ if IsDuplicityVersion() then
   math.randomseed(os.time() + math.floor(os.clock() * 1000))
 end
 
---- RFC-4122-shaped v4 uuid (36 chars — fits sov_bank_transactions.tx_uuid).
+--- RFC-4122-shaped v4 uuid (36 chars — fits sovereign_banking_transactions.tx_uuid).
 function Util.uuid()
   local template = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'
   return (template:gsub('[xy]', function(c)

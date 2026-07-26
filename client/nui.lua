@@ -1,7 +1,7 @@
 --[[
   client/nui.lua — NUI ↔ server marshalling (tech spec §10.1).
   The NUI never talks to the server directly: it posts to this file, which
-  forwards over the sov_bank RPC layer and returns the server's reply to the
+  forwards over the sovereign_banking RPC layer and returns the server's reply to the
   fetch promise. The client adds nothing and trusts nothing.
 ]]
 
@@ -17,7 +17,7 @@ function Rpc(name, payload, cb)
   nextId = nextId + 1
   local id = nextId
   pending[id] = cb
-  TriggerServerEvent('sov_bank:rpc:request', name, id, payload)
+  TriggerServerEvent('sovereign_banking:rpc:request', name, id, payload)
 
   -- Reap abandoned requests so a lost reply can't leak callbacks forever.
   SetTimeout(10000, function()
@@ -29,7 +29,7 @@ function Rpc(name, payload, cb)
   end)
 end
 
-RegisterNetEvent('sov_bank:rpc:response', function(reqId, res)
+RegisterNetEvent('sovereign_banking:rpc:response', function(reqId, res)
   local cb = pending[reqId]
   pending[reqId] = nil
   if cb then cb(res) end

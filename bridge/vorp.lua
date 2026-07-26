@@ -24,9 +24,9 @@ do
   if ok and core then
     Core = core
   elseif IsDuplicityVersion() then
-    Log.error('FATAL: could not acquire VORP core — is vorp_core started before sov_bank?')
+    Log.error('FATAL: could not acquire VORP core — is vorp_core started before sovereign_banking?')
   else
-    print('^1[sov_bank] could not acquire VORP core on client^7')
+    print('^1[sovereign_banking] could not acquire VORP core on client^7')
   end
 end
 

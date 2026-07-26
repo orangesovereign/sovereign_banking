@@ -52,7 +52,7 @@ function Society.account(societyId)
   local soc = Society.get(societyId)
   if not soc then return nil end
   return Db.single([[
-    SELECT * FROM sov_bank_accounts
+    SELECT * FROM sovereign_banking_accounts
     WHERE owner_type = 'society' AND owner_id = ? AND status <> 'closed'
     LIMIT 1
   ]], { soc.id })
@@ -160,7 +160,7 @@ function Society.ensureAccounts()
       if num then
         local number = ('%s%07d'):format(prefix, num)
         Db.execute([[
-          INSERT IGNORE INTO sov_bank_accounts (id, account_number, owner_type, owner_id, name, kind)
+          INSERT IGNORE INTO sovereign_banking_accounts (id, account_number, owner_type, owner_id, name, kind)
           VALUES (?, ?, 'society', ?, ?, 'society')
         ]], { num, number, soc.id, soc.name })
         existing = Society.account(soc.id)
@@ -178,7 +178,7 @@ function Society.ensureAccounts()
           Log.error('cannot brand society %s as %s: number already held by account id %s',
             soc.id, wanted, tostring(clash.id))
         else
-          Db.execute('UPDATE sov_bank_accounts SET account_number = ? WHERE id = ?',
+          Db.execute('UPDATE sovereign_banking_accounts SET account_number = ? WHERE id = ?',
             { wanted, existing.id })
           Log.info('rebranded society account %s as %s', soc.id, wanted)
         end

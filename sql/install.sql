@@ -1,10 +1,10 @@
 -- ============================================================================
 -- Sovereign Bank — full schema (tech spec §4)
 -- All amounts are BIGINT minor units ("cents"). InnoDB, utf8mb4.
--- Fully idempotent: safe to run on every boot (sov_bank does this by default).
+-- Fully idempotent: safe to run on every boot (sovereign_banking does this by default).
 -- ============================================================================
 
-CREATE TABLE IF NOT EXISTS sov_bank_accounts (
+CREATE TABLE IF NOT EXISTS sovereign_banking_accounts (
   id                INT UNSIGNED NOT NULL AUTO_INCREMENT,
   account_number    VARCHAR(24)  NOT NULL,
   owner_type        ENUM('character','society','business','joint','system') NOT NULL,
@@ -26,7 +26,7 @@ CREATE TABLE IF NOT EXISTS sov_bank_accounts (
 -- ^ ids 1-1000 (and the account numbers branded from them) are reserved for
 --   government and system accounts. Organic accounts start at 1001.
 
-CREATE TABLE IF NOT EXISTS sov_bank_access (
+CREATE TABLE IF NOT EXISTS sovereign_banking_access (
   id             INT UNSIGNED NOT NULL AUTO_INCREMENT,
   account_id     INT UNSIGNED NOT NULL,
   charidentifier VARCHAR(64) NOT NULL,
@@ -37,10 +37,10 @@ CREATE TABLE IF NOT EXISTS sov_bank_access (
   UNIQUE KEY uq_acct_char (account_id, charidentifier),
   KEY idx_char (charidentifier),
   CONSTRAINT fk_access_acct FOREIGN KEY (account_id)
-    REFERENCES sov_bank_accounts(id) ON DELETE CASCADE
+    REFERENCES sovereign_banking_accounts(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-CREATE TABLE IF NOT EXISTS sov_bank_transactions (
+CREATE TABLE IF NOT EXISTS sovereign_banking_transactions (
   id                       BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   tx_uuid                  CHAR(36) NOT NULL,
   account_id               INT UNSIGNED NULL,
@@ -59,7 +59,7 @@ CREATE TABLE IF NOT EXISTS sov_bank_transactions (
   KEY idx_category (category)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-CREATE TABLE IF NOT EXISTS sov_bank_loans (
+CREATE TABLE IF NOT EXISTS sovereign_banking_loans (
   id                INT UNSIGNED NOT NULL AUTO_INCREMENT,
   charidentifier    VARCHAR(64) NOT NULL,
   account_id        INT UNSIGNED NOT NULL,
@@ -77,15 +77,15 @@ CREATE TABLE IF NOT EXISTS sov_bank_loans (
   KEY idx_status (status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-CREATE TABLE IF NOT EXISTS sov_bank_savings_accrual (
+CREATE TABLE IF NOT EXISTS sovereign_banking_savings_accrual (
   account_id       INT UNSIGNED NOT NULL,
   last_accrued_at  DATETIME NOT NULL,
   PRIMARY KEY (account_id),
   CONSTRAINT fk_accrual_acct FOREIGN KEY (account_id)
-    REFERENCES sov_bank_accounts(id) ON DELETE CASCADE
+    REFERENCES sovereign_banking_accounts(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-CREATE TABLE IF NOT EXISTS sov_bank_sdb (
+CREATE TABLE IF NOT EXISTS sovereign_banking_sdb (
   id              INT UNSIGNED NOT NULL AUTO_INCREMENT,
   account_id      INT UNSIGNED NULL,
   owner_id        VARCHAR(64) NOT NULL,
@@ -98,7 +98,7 @@ CREATE TABLE IF NOT EXISTS sov_bank_sdb (
   KEY idx_owner (owner_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-CREATE TABLE IF NOT EXISTS sov_bank_bills (
+CREATE TABLE IF NOT EXISTS sovereign_banking_bills (
   id                 INT UNSIGNED NOT NULL AUTO_INCREMENT,
   bill_uuid          CHAR(36) NOT NULL,
   issuer_type        ENUM('character','society','system') NOT NULL,
@@ -121,7 +121,7 @@ CREATE TABLE IF NOT EXISTS sov_bank_bills (
   KEY idx_kind (kind)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-CREATE TABLE IF NOT EXISTS sov_bank_business_tax (
+CREATE TABLE IF NOT EXISTS sovereign_banking_business_tax (
   business_id      VARCHAR(64) NOT NULL,
   building_price   BIGINT NOT NULL,
   license_rate     DECIMAL(5,4) NOT NULL DEFAULT 0.2500,
@@ -134,7 +134,7 @@ CREATE TABLE IF NOT EXISTS sov_bank_business_tax (
   PRIMARY KEY (business_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-CREATE TABLE IF NOT EXISTS sov_bank_seizures (
+CREATE TABLE IF NOT EXISTS sovereign_banking_seizures (
   id               INT UNSIGNED NOT NULL AUTO_INCREMENT,
   bill_id          INT UNSIGNED NOT NULL,
   collector_charid VARCHAR(64) NOT NULL,
@@ -149,7 +149,7 @@ CREATE TABLE IF NOT EXISTS sov_bank_seizures (
   KEY idx_debtor (debtor_charid)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-CREATE TABLE IF NOT EXISTS sov_bank_liens (
+CREATE TABLE IF NOT EXISTS sovereign_banking_liens (
   id            INT UNSIGNED NOT NULL AUTO_INCREMENT,
   bill_id       INT UNSIGNED NULL,
   account_id    INT UNSIGNED NULL,
@@ -165,7 +165,7 @@ CREATE TABLE IF NOT EXISTS sov_bank_liens (
   KEY idx_bill (bill_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-CREATE TABLE IF NOT EXISTS sov_bank_reserves (
+CREATE TABLE IF NOT EXISTS sovereign_banking_reserves (
   branch_id        VARCHAR(48) NOT NULL,
   currency         TINYINT NOT NULL DEFAULT 0,
   balance          BIGINT NOT NULL DEFAULT 0,
@@ -174,7 +174,7 @@ CREATE TABLE IF NOT EXISTS sov_bank_reserves (
   PRIMARY KEY (branch_id, currency)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-CREATE TABLE IF NOT EXISTS sov_bank_meta (
+CREATE TABLE IF NOT EXISTS sovereign_banking_meta (
   meta_key   VARCHAR(32) NOT NULL,
   meta_value VARCHAR(64) NOT NULL,
   PRIMARY KEY (meta_key)

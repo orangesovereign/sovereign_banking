@@ -5,7 +5,7 @@
 
 'use strict';
 
-const RES = (typeof GetParentResourceName === 'function') ? GetParentResourceName() : 'sov_bank';
+const RES = (typeof GetParentResourceName === 'function') ? GetParentResourceName() : 'sovereign_banking';
 const PAGE_SIZE = 8;
 
 const S = {

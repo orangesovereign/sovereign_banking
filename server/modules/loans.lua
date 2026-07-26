@@ -11,7 +11,7 @@
   loan_repay, tech spec §8.4). Net effect per completed loan: the money
   supply shrinks by the interest — a mild, deliberate deflationary sink.
 
-  Approval is by server console (`sovbank loan ...`) or the ApproveLoan /
+  Approval is by server console (`banking loan ...`) or the ApproveLoan /
   DenyLoan exports until the Phase 4 admin panel lands. Config.Loans.
   requireApproval=false auto-approves at application time.
 ]]
@@ -27,7 +27,7 @@ function Loans.get(loanId)
   return Db.single([[
     SELECT *, UNIX_TIMESTAMP(due_by) AS due_epoch,
            UNIX_TIMESTAMP(created_at) AS created_epoch
-    FROM sov_bank_loans WHERE id = ?
+    FROM sovereign_banking_loans WHERE id = ?
   ]], { loanId })
 end
 
@@ -35,14 +35,14 @@ function Loans.listFor(charid)
   return Db.query([[
     SELECT *, UNIX_TIMESTAMP(due_by) AS due_epoch,
            UNIX_TIMESTAMP(created_at) AS created_epoch
-    FROM sov_bank_loans WHERE charidentifier = ?
+    FROM sovereign_banking_loans WHERE charidentifier = ?
     ORDER BY id DESC LIMIT 20
   ]], { tostring(charid) }) or {}
 end
 
 local function openCount(charid)
   return tonumber(Db.scalar([[
-    SELECT COUNT(*) FROM sov_bank_loans
+    SELECT COUNT(*) FROM sovereign_banking_loans
     WHERE charidentifier = ? AND status IN ('pending','active')
   ]], { tostring(charid) })) or 0
 end
@@ -77,7 +77,7 @@ function Loans.create(charid, principal, rate, accountId, meta)
     totalDue = principal + math.floor(principal * rate + 0.5)
 
     id = Db.insert([[
-      INSERT INTO sov_bank_loans
+      INSERT INTO sovereign_banking_loans
         (charidentifier, account_id, principal, total_due, balance_remaining, interest_flat, status)
       VALUES (?, ?, ?, ?, ?, ?, 'pending')
     ]], { charid, acct.id, principal, totalDue, totalDue, rate })
@@ -94,7 +94,7 @@ function Loans.create(charid, principal, rate, accountId, meta)
       -- Auto-approval failed (e.g. the target account was frozen). Close the
       -- application out, or it counts against maxActivePerChar forever and the
       -- borrower can never apply again.
-      Db.execute("UPDATE sov_bank_loans SET status = 'denied', approved_by = 'auto-failed' WHERE id = ? AND status = 'pending'",
+      Db.execute("UPDATE sovereign_banking_loans SET status = 'denied', approved_by = 'auto-failed' WHERE id = ? AND status = 'pending'",
         { id })
       return false, ares
     end
@@ -119,18 +119,18 @@ function Loans.approve(loanId, approver)
       tonumber(loan.principal), {
         category = Constants.Category.LOAN_DISBURSE,
         memo = ('Loan #%d disbursement'):format(loan.id),
-        source = 'sov_bank',
+        source = 'sovereign_banking',
         idem = ('loan_disburse:%d'):format(loan.id),
       })
     if not ok then return false, res end
 
     if dueEpoch then
       Db.execute([[
-        UPDATE sov_bank_loans SET status = 'active', approved_by = ?, due_by = FROM_UNIXTIME(?)
+        UPDATE sovereign_banking_loans SET status = 'active', approved_by = ?, due_by = FROM_UNIXTIME(?)
         WHERE id = ?
       ]], { tostring(approver or '?'), dueEpoch, loan.id })
     else
-      Db.execute('UPDATE sov_bank_loans SET status = \'active\', approved_by = ? WHERE id = ?',
+      Db.execute('UPDATE sovereign_banking_loans SET status = \'active\', approved_by = ? WHERE id = ?',
         { tostring(approver or '?'), loan.id })
     end
     Log.info('loan #%d approved by %s, %s disbursed to account %d',
@@ -152,7 +152,7 @@ function Loans.deny(loanId, approver)
     local loan = Loans.get(loanId)
     if not loan then return false, Err.NO_LOAN end
     if loan.status ~= 'pending' then return false, Err.LOAN_CLOSED end
-    Db.execute('UPDATE sov_bank_loans SET status = \'denied\', approved_by = ? WHERE id = ?',
+    Db.execute('UPDATE sovereign_banking_loans SET status = \'denied\', approved_by = ? WHERE id = ?',
       { tostring(approver or '?'), loan.id })
     Log.info('loan #%d denied by %s', loan.id, tostring(approver))
     return true, { loanId = loan.id }
@@ -196,7 +196,7 @@ function Loans.repay(loanId, payerCharid, payWith, amount, meta)
         { category = Constants.Category.LOAN_REPAY, memo = memoLine, source = meta.source })
       if not ok2 then
         Money.walletCredit(payerCharid, Constants.Currency.MONEY, toPay, {
-          category = Constants.Category.COMPENSATION, source = 'sov_bank',
+          category = Constants.Category.COMPENSATION, source = 'sovereign_banking',
           memo = ('reversal: %s'):format(memoLine), silent = true,
         })
         return false, res2
@@ -212,8 +212,8 @@ function Loans.repay(loanId, payerCharid, payWith, amount, meta)
     local newRemaining = remaining - toPay
     local closed = newRemaining <= 0
     Db.execute(closed
-      and 'UPDATE sov_bank_loans SET balance_remaining = 0, status = \'paid\' WHERE id = ?'
-      or 'UPDATE sov_bank_loans SET balance_remaining = ? WHERE id = ?',
+      and 'UPDATE sovereign_banking_loans SET balance_remaining = 0, status = \'paid\' WHERE id = ?'
+      or 'UPDATE sovereign_banking_loans SET balance_remaining = ? WHERE id = ?',
       closed and { loan.id } or { newRemaining, loan.id })
 
     Log.info('loan #%d: %s repaid %s, remaining %s%s',
@@ -225,7 +225,7 @@ end
 --- Scheduler: mark active loans past due_by as defaulted (design §5.3).
 function Loans.sweepDefaults(limit)
   local rows = Db.query([[
-    SELECT id FROM sov_bank_loans
+    SELECT id FROM sovereign_banking_loans
     WHERE status = 'active' AND due_by IS NOT NULL AND due_by < NOW()
     LIMIT ?
   ]], { limit or 50 }) or {}
@@ -233,7 +233,7 @@ function Loans.sweepDefaults(limit)
     Money.withLocks({ 'loan:' .. r.id }, function()
       local loan = Loans.get(r.id)
       if not loan or loan.status ~= 'active' then return true end
-      Db.execute('UPDATE sov_bank_loans SET status = \'defaulted\' WHERE id = ?', { loan.id })
+      Db.execute('UPDATE sovereign_banking_loans SET status = \'defaulted\' WHERE id = ?', { loan.id })
       Log.warn('loan #%d DEFAULTED (%s still owes %s)',
         loan.id, loan.charidentifier, loan.balance_remaining)
       Log.discord('loans', ('Loan #%d defaulted'):format(loan.id), nil, {
@@ -251,6 +251,6 @@ end
 function Loans.listPending()
   return Db.query([[
     SELECT id, charidentifier, principal, total_due, created_at
-    FROM sov_bank_loans WHERE status = 'pending' ORDER BY id ASC LIMIT 50
+    FROM sovereign_banking_loans WHERE status = 'pending' ORDER BY id ASC LIMIT 50
   ]]) or {}
 end

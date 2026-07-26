@@ -114,7 +114,7 @@
   <header class="masthead">
     <div class="over">~ Sovereign County Bank &mdash; Office of the Comptroller ~</div>
     <h1>B2 COMMERCE &amp; CREDIT LEDGER</h1>
-    <div class="sub">Bills, societies, loans, interest, gold &amp; the vault — sov_bank v0.6.0</div>
+    <div class="sub">Bills, societies, loans, interest, gold &amp; the vault — sovereign_banking v0.6.0</div>
     <p class="note">The second gate: the rails the rest of the county bills and pays wages on. Assumes B1 is green. Several steps need time to have passed &mdash; rather than waiting a real week, each gives you the SQL to backdate a timestamp and let the sweep catch it. Article VIII is flagged <em>high risk</em> for a reason worth reading before you start it. Mark each line, note the <code>ERR_</code> code on failure, then <em>Build the Report</em> and paste it back.</p>
     <div class="cast">
       <div class="who a"><b>IN GAME</b> &mdash; your character, at a bank counter</div>
@@ -162,13 +162,13 @@
             {
                 "id": "B1",
                 "who": "b",
-                "t": "From the console or another resource:<pre class=\"sql\">exports.sov_bank:IssueInvoice('42', '77', 0, 12500, 'Cattle feed')</pre>",
-                "x": "<b>Expect:</b> returns ok with a bill id, and a row in <code>sov_bank_bills</code> with <code>kind='invoice'</code>, status <code>pending</code>."
+                "t": "From the console or another resource:<pre class=\"sql\">exports.sovereign_banking:IssueInvoice('42', '77', 0, 12500, 'Cattle feed')</pre>",
+                "x": "<b>Expect:</b> returns ok with a bill id, and a row in <code>sovereign_banking_bills</code> with <code>kind='invoice'</code>, status <code>pending</code>."
             },
             {
                 "id": "B2",
                 "who": "b",
-                "t": "Now a government debt:<pre class=\"sql\">exports.sov_bank:IssueFine('77', 0, 5000, 'Disturbing the peace')</pre>",
+                "t": "Now a government debt:<pre class=\"sql\">exports.sovereign_banking:IssueFine('77', 0, 5000, 'Disturbing the peace')</pre>",
                 "x": "<b>Expect:</b> a bill with <code>kind='fine'</code>, <code>issuer_type='system'</code>."
             },
             {
@@ -247,7 +247,7 @@
             {
                 "id": "L1",
                 "who": "b",
-                "t": "Backdate a fine and let the sweep run (&le;15 min) or restart the resource:<pre class=\"sql\">UPDATE sov_bank_bills SET due_at = NOW() - INTERVAL 5 DAY WHERE id = ?;</pre>",
+                "t": "Backdate a fine and let the sweep run (&le;15 min) or restart the resource:<pre class=\"sql\">UPDATE sovereign_banking_bills SET due_at = NOW() - INTERVAL 5 DAY WHERE id = ?;</pre>",
                 "x": "<b>Expect:</b> status moves <code>pending</code> &rarr; <code>overdue</code>, and a late fee is added to <code>balance_remaining</code>."
             },
             {
@@ -267,7 +267,7 @@
                 "id": "L4",
                 "who": "b",
                 "t": "Backdate a <b>fine</b> 20+ days with a balance over the arrestable threshold, then sweep.",
-                "x": "<b>Expect:</b> status becomes <code>warrant</code> and the resource fires <code>sov_bank:server:warrantFiled</code>."
+                "x": "<b>Expect:</b> status becomes <code>warrant</code> and the resource fires <code>sovereign_banking:server:warrantFiled</code>."
             },
             {
                 "id": "L5",
@@ -339,7 +339,7 @@
             {
                 "id": "Y8",
                 "who": "b",
-                "t": "<code>sovbank reconcile &lt;societyAccountId&gt;</code> after all of the above.",
+                "t": "<code>banking reconcile &lt;societyAccountId&gt;</code> after all of the above.",
                 "x": "<b>Expect:</b> <code>ok: true</code>, no drift."
             }
         ]
@@ -365,14 +365,14 @@
             {
                 "id": "N3",
                 "who": "b",
-                "t": "<code>sovbank loans</code> in the console.",
+                "t": "<code>banking loans</code> in the console.",
                 "x": "<b>Expect:</b> the pending application is listed with borrower, principal and total due."
             },
             {
                 "id": "N4",
                 "who": "b",
                 "gate": true,
-                "t": "<code>sovbank loans approve &lt;id&gt;</code>",
+                "t": "<code>banking loans approve &lt;id&gt;</code>",
                 "x": "<b>Expect:</b> the principal is credited to the chosen account, status becomes <code>active</code>, and <code>due_by</code> is set."
             },
             {
@@ -396,7 +396,7 @@
             {
                 "id": "N8",
                 "who": "b",
-                "t": "File a fresh application and <code>sovbank loans deny &lt;id&gt;</code>.",
+                "t": "File a fresh application and <code>banking loans deny &lt;id&gt;</code>.",
                 "x": "<b>Expect:</b> status <code>denied</code>, and <b>nothing</b> was disbursed."
             },
             {
@@ -416,7 +416,7 @@
             {
                 "id": "I1",
                 "who": "b",
-                "t": "Put money in a <b>savings</b> account, then force three weeks to have passed:<pre class=\"sql\">UPDATE sov_bank_savings_accrual\nSET last_accrued_at = NOW() - INTERVAL 21 DAY\nWHERE account_id = ?;</pre>",
+                "t": "Put money in a <b>savings</b> account, then force three weeks to have passed:<pre class=\"sql\">UPDATE sovereign_banking_savings_accrual\nSET last_accrued_at = NOW() - INTERVAL 21 DAY\nWHERE account_id = ?;</pre>",
                 "x": "<b>Expect:</b> the row updates. (If no row exists, visit the teller once to create it.)"
             },
             {
@@ -456,7 +456,7 @@
             {
                 "id": "I7",
                 "who": "b",
-                "t": "<code>sovbank reconcile &lt;savingsAccountId&gt;</code>",
+                "t": "<code>banking reconcile &lt;savingsAccountId&gt;</code>",
                 "x": "<b>Expect:</b> no drift. Interest is a ledgered credit like any other."
             },
             {
@@ -546,7 +546,7 @@
             {
                 "id": "V7",
                 "who": "b",
-                "t": "Force the rent overdue:<pre class=\"sql\">UPDATE sov_bank_sdb\nSET rent_paid_until = NOW() - INTERVAL 30 DAY\nWHERE id = ?;</pre>",
+                "t": "Force the rent overdue:<pre class=\"sql\">UPDATE sovereign_banking_sdb\nSET rent_paid_until = NOW() - INTERVAL 30 DAY\nWHERE id = ?;</pre>",
                 "x": "<b>Expect:</b> the box shows <b>rent due</b> and Open is disabled; forcing it returns <code>ERR_RENT_DUE</code>."
             },
             {
@@ -565,7 +565,7 @@
         ]
     }
 ];
-  const KEY = 'sovbank-b2-commerce';
+  const KEY = 'banking-b2-commerce';
   const REPORT_TITLE = 'SOVEREIGN BANK — B2 Commerce & Credit Ledger — Results';
   const GATE_NOTE = 'other scripts should not issue debt or run payroll until these pass.';
 

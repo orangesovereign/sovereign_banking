@@ -114,7 +114,7 @@
   <header class="masthead">
     <div class="over">~ Sovereign County Bank &mdash; Office of the Comptroller ~</div>
     <h1>B3 ENFORCEMENT &amp; OPS LEDGER</h1>
-    <div class="sub">Business tax, collections, seizure, heists &amp; the ledger office — sov_bank v0.6.0</div>
+    <div class="sub">Business tax, collections, seizure, heists &amp; the ledger office — sovereign_banking v0.6.0</div>
     <p class="note">The last gate, and the one with the sharpest edges. Article III authorises force and Article IV carries the promise that banked money can never be robbed &mdash; their blockers matter more than any feature in the bank. Articles I and II lie dormant until a <code>tax_office</code> job exists and a store registers a business; skip them if that is still true. Mark each line, note the <code>ERR_</code> code on failure, then <em>Build the Report</em> and paste it back.</p>
     <div class="cast">
       <div class="who a"><b>IN GAME</b> &mdash; your character, at a bank counter</div>
@@ -162,7 +162,7 @@
             {
                 "id": "Z1",
                 "who": "b",
-                "t": "No purchase flow is wired yet, so register by hand:<pre class=\"sql\">exports.sov_bank:RegisterBusiness('valentine_gunsmith', '42', 200000,\n  { name = 'Valentine Gunsmith' })</pre>",
+                "t": "No purchase flow is wired yet, so register by hand:<pre class=\"sql\">exports.sovereign_banking:RegisterBusiness('valentine_gunsmith', '42', 200000,\n  { name = 'Valentine Gunsmith' })</pre>",
                 "x": "<b>Expect:</b> a business account is created and a Tax Ledger row opens with the building price as its basis."
             },
             {
@@ -174,7 +174,7 @@
             {
                 "id": "Z3",
                 "who": "b",
-                "t": "<code>exports.sov_bank:AssessBusinessTax('valentine_gunsmith')</code>",
+                "t": "<code>exports.sovereign_banking:AssessBusinessTax('valentine_gunsmith')</code>",
                 "x": "<b>Expect:</b> owed rises by $500 and a <code>tax_assessed</code> row appears in the ledger."
             },
             {
@@ -194,13 +194,13 @@
                 "id": "Z6",
                 "who": "b",
                 "gate": true,
-                "t": "<code>sovbank reconcile &lt;businessAccountId&gt;</code>",
+                "t": "<code>banking reconcile &lt;businessAccountId&gt;</code>",
                 "x": "<b>Expect:</b> <b>no drift.</b> Assessments are deliberately ledgered against no account (they are an obligation, not a movement) precisely so this holds."
             },
             {
                 "id": "Z7",
                 "who": "b",
-                "t": "Backdate <code>next_due_at</code> in <code>sov_bank_business_tax</code> with a balance owed, then let the sweep run.",
+                "t": "Backdate <code>next_due_at</code> in <code>sovereign_banking_business_tax</code> with a balance owed, then let the sweep run.",
                 "x": "<b>Expect:</b> a <code>tax</code> bill opens against the <b>owner</b> and enters the collections pipeline as government debt."
             },
             {
@@ -265,7 +265,7 @@
                 "id": "Q8",
                 "who": "b",
                 "gate": true,
-                "t": "<b>Security regression.</b> As a collector, try to collect a debt from an account the <b>debtor does not own</b> &mdash; e.g. another player's account id:<pre class=\"sql\">exports.sov_bank:RecordCollection(billId, 100, {\n  collectorCharid = '&lt;collector&gt;', payWith = &lt;someone else's accountId&gt; })</pre>",
+                "t": "<b>Security regression.</b> As a collector, try to collect a debt from an account the <b>debtor does not own</b> &mdash; e.g. another player's account id:<pre class=\"sql\">exports.sovereign_banking:RecordCollection(billId, 100, {\n  collectorCharid = '&lt;collector&gt;', payWith = &lt;someone else's accountId&gt; })</pre>",
                 "x": "<b>Expect:</b> <code>ERR_ACCESS</code> and <b>no money moves</b>. <i>An audit found this unguarded &mdash; a collector could name any account in the bank as the payment source and drain it under color of a real debt. The suite covers it too; this confirms it end to end.</i>"
             },
             {
@@ -286,7 +286,7 @@
                 "id": "E1",
                 "who": "b",
                 "gate": true,
-                "t": "<code>exports.sov_bank:IsSeizureAuthorized(collectorCharid, debtorWithNoDebt)</code>",
+                "t": "<code>exports.sovereign_banking:IsSeizureAuthorized(collectorCharid, debtorWithNoDebt)</code>",
                 "x": "<b>Expect:</b> <b>false.</b> No debt, no authority &mdash; this is what your restraint script must check before allowing a rope."
             },
             {
@@ -331,7 +331,7 @@
             {
                 "id": "E8",
                 "who": "b",
-                "t": "<code>SELECT * FROM sov_bank_seizures ORDER BY id DESC LIMIT 1;</code>",
+                "t": "<code>SELECT * FROM sovereign_banking_seizures ORDER BY id DESC LIMIT 1;</code>",
                 "x": "<b>Expect:</b> a row naming collector, debtor, the itemised JSON, assessed value, amount applied and surplus returned. Every seizure is disputable after the fact."
             },
             {
@@ -352,19 +352,19 @@
                 "id": "H1",
                 "who": "b",
                 "gate": true,
-                "t": "<b>Before anything:</b> snapshot every balance.<pre class=\"sql\">SELECT SUM(balance_money) AS total FROM sov_bank_accounts;</pre>",
+                "t": "<b>Before anything:</b> snapshot every balance.<pre class=\"sql\">SELECT SUM(balance_money) AS total FROM sovereign_banking_accounts;</pre>",
                 "x": "<b>Expect:</b> a number. Write it down &mdash; H4 depends on it."
             },
             {
                 "id": "H2",
                 "who": "b",
-                "t": "Rob the till:<pre class=\"sql\">exports.sov_bank:ClaimBranchReserve('valentine', 0,\n  { fraction = 0.6, looters = { '42' } })</pre>",
+                "t": "Rob the till:<pre class=\"sql\">exports.sovereign_banking:ClaimBranchReserve('valentine', 0,\n  { fraction = 0.6, looters = { '42' } })</pre>",
                 "x": "<b>Expect:</b> returns <code>looted</code> and <code>remaining</code>, and the looter's <b>cash in hand</b> grows by the take."
             },
             {
                 "id": "H3",
                 "who": "b",
-                "t": "<code>SELECT balance FROM sov_bank_reserves WHERE branch_id='valentine';</code>",
+                "t": "<code>SELECT balance FROM sovereign_banking_reserves WHERE branch_id='valentine';</code>",
                 "x": "<b>Expect:</b> down by <b>exactly</b> what was looted."
             },
             {
@@ -377,7 +377,7 @@
             {
                 "id": "H5",
                 "who": "b",
-                "t": "Find the heist row: <code>SELECT * FROM sov_bank_transactions WHERE category='heist' ORDER BY id DESC LIMIT 1;</code>",
+                "t": "Find the heist row: <code>SELECT * FROM sovereign_banking_transactions WHERE category='heist' ORDER BY id DESC LIMIT 1;</code>",
                 "x": "<b>Expect:</b> a row with <code>account_id</code> <b>NULL</b> and the branch named in the memo &mdash; the till is not an account, so it stays out of reconciliation."
             },
             {
@@ -468,7 +468,7 @@
             {
                 "id": "O10",
                 "who": "a",
-                "t": "Compare the branch till meters to <code>sov_bank_reserves</code>.",
+                "t": "Compare the branch till meters to <code>sovereign_banking_reserves</code>.",
                 "x": "<b>Expect:</b> they match, including any till you emptied in Article IV."
             }
         ]
@@ -483,7 +483,7 @@
                 "id": "K1",
                 "who": "b",
                 "gate": true,
-                "t": "From <b>another resource</b>, call <code>exports.sov_bank:AddMoney(charid, 0, 2500, { reason='payroll' })</code>.",
+                "t": "From <b>another resource</b>, call <code>exports.sovereign_banking:AddMoney(charid, 0, 2500, { reason='payroll' })</code>.",
                 "x": "<b>Expect:</b> it pays, and the ledger row's <code>source_resource</code> names <b>that resource</b> &mdash; attribution is automatic."
             },
             {
@@ -502,19 +502,19 @@
             {
                 "id": "K4",
                 "who": "b",
-                "t": "Add a listener for <code>sov_bank:server:transactionCompleted</code> and move some money.",
+                "t": "Add a listener for <code>sovereign_banking:server:transactionCompleted</code> and move some money.",
                 "x": "<b>Expect:</b> it fires with charid, account, amount, direction and category."
             },
             {
                 "id": "K5",
                 "who": "b",
-                "t": "Listen for <code>sov_bank:server:warrantFiled</code> across a full delinquency run.",
+                "t": "Listen for <code>sovereign_banking:server:warrantFiled</code> across a full delinquency run.",
                 "x": "<b>Expect:</b> it fires for fines and taxes only &mdash; never for a private invoice."
             },
             {
                 "id": "K6",
                 "who": "b",
-                "t": "<i>Only if you enabled it:</i> with <code>Config.Compat.enabled = true</code>, call <code>exports.sov_bank:addMoney(source, 0, 12.50)</code>.",
+                "t": "<i>Only if you enabled it:</i> with <code>Config.Compat.enabled = true</code>, call <code>exports.sovereign_banking:addMoney(source, 0, 12.50)</code>.",
                 "x": "<b>Expect:</b> $12.50 arrives &mdash; the shim takes a <b>source</b> and <b>display units</b>, unlike the native exports."
             }
         ]
@@ -529,13 +529,13 @@
                 "id": "F1",
                 "who": "b",
                 "gate": true,
-                "t": "<code>sovbankadmin reconcile 500</code> in the console.",
+                "t": "<code>banking_admin reconcile 500</code> in the console.",
                 "x": "<b>Expect:</b> <code>drifted: []</code>. Every account's ledger sum equals its stored balance, after a full day of abuse."
             },
             {
                 "id": "F2",
                 "who": "b",
-                "t": "<code>sovbankadmin supply 7</code>",
+                "t": "<code>banking_admin supply 7</code>",
                 "x": "<b>Expect:</b> a sane picture &mdash; faucets and sinks by category, with nothing wildly lopsided you cannot explain."
             },
             {
@@ -553,7 +553,7 @@
         ]
     }
 ];
-  const KEY = 'sovbank-b3-enforcement';
+  const KEY = 'banking-b3-enforcement';
   const REPORT_TITLE = 'SOVEREIGN BANK — B3 Enforcement & Ops Ledger — Results';
   const GATE_NOTE = 'do not enable heists or hand out the Tax Collector job until these pass.';
 

@@ -5,7 +5,7 @@
   already expect, so existing resources route through Sovereign Bank (and land
   in the ledger) without being rewritten:
 
-      exports['sov_bank']:addMoney(src, 0, 12.50)
+      exports['sovereign_banking']:addMoney(src, 0, 12.50)
 
   Two deliberate differences from the native exports in exports.lua:
   - These take a PLAYER SOURCE (what VORP-style scripts pass around), not a
@@ -96,7 +96,7 @@ exports('addGold', function(idOrSrc, amount) return addMoney(idOrSrc, 1, amount)
 exports('removeGold', function(idOrSrc, amount) return removeMoney(idOrSrc, 1, amount) end)
 
 -- Event forms for fire-and-forget callers (server-side TriggerEvent only).
-AddEventHandler('sov_bank:compat:addMoney', addMoney)
-AddEventHandler('sov_bank:compat:removeMoney', removeMoney)
+AddEventHandler('sovereign_banking:compat:addMoney', addMoney)
+AddEventHandler('sovereign_banking:compat:removeMoney', removeMoney)
 
 Log.info('migration shim enabled — legacy money exports route through the bank')

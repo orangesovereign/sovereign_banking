@@ -48,12 +48,12 @@ end)
 -- Transport
 -- ============================================================================
 
-RegisterNetEvent('sov_bank:rpc:request', function(name, reqId, payload)
+RegisterNetEvent('sovereign_banking:rpc:request', function(name, reqId, payload)
   local src = source
   if type(name) ~= 'string' or reqId == nil then return end
 
   local function respond(res)
-    TriggerClientEvent('sov_bank:rpc:response', src, reqId, res)
+    TriggerClientEvent('sovereign_banking:rpc:response', src, reqId, res)
   end
 
   if not allowRequest(src) then
@@ -209,7 +209,7 @@ handlers['deposit'] = guarded(function(ctx, p)
   end
   local ok, res = Money.deposit(ctx.charid, p.accountId, tonumber(p.currency), amount, {
     category = Constants.Category.DEPOSIT,
-    source = 'sov_bank',
+    source = 'sovereign_banking',
     memo = ('Teller deposit — %s'):format(ctx.branch.name),
   })
   if not ok then return { ok = false, error = res } end
@@ -224,7 +224,7 @@ handlers['withdraw'] = guarded(function(ctx, p)
   end
   local ok, res = Money.withdraw(ctx.charid, p.accountId, tonumber(p.currency), amount, {
     category = Constants.Category.WITHDRAW,
-    source = 'sov_bank',
+    source = 'sovereign_banking',
     memo = ('Teller withdrawal — %s'):format(ctx.branch.name),
   })
   if not ok then return { ok = false, error = res } end
@@ -253,7 +253,7 @@ handlers['transfer'] = guarded(function(ctx, p)
 
   local ok, res = Money.transfer(fromId, target.id, tonumber(p.currency), amount, {
     category = Constants.Category.TRANSFER,
-    source = 'sov_bank',
+    source = 'sovereign_banking',
     memo = Util.truncate(p.memo, 140) or ('Teller transfer — %s'):format(ctx.branch.name),
     crossBranch = (not ownTarget) or nil,
   })
@@ -371,7 +371,7 @@ handlers['payBill'] = guarded(function(ctx, p)
   local amount = p.amount ~= nil and parseAmount(p.amount) or nil
   if p.amount ~= nil and not amount then return { ok = false, error = Err.BAD_AMOUNT } end
 
-  local ok, res = Billing.pay(p.billId, ctx.charid, payWith, amount, { source = 'sov_bank' })
+  local ok, res = Billing.pay(p.billId, ctx.charid, payWith, amount, { source = 'sovereign_banking' })
   if not ok then return { ok = false, error = res } end
 
   local rows = {}
@@ -423,7 +423,7 @@ handlers['societyDeposit'] = guarded(function(ctx, p)
   if not amount then return { ok = false, error = Err.BAD_AMOUNT } end
   local ok, res = Money.deposit(ctx.charid, sctx.acct.id, Constants.Currency.MONEY, amount, {
     category = Constants.Category.DEPOSIT,
-    source = 'sov_bank',
+    source = 'sovereign_banking',
     memo = ('%s fund deposit — %s'):format(sctx.soc.name, ctx.branch.name),
   })
   if not ok then return { ok = false, error = res } end
@@ -437,7 +437,7 @@ handlers['societyWithdraw'] = guarded(function(ctx, p)
   if not amount then return { ok = false, error = Err.BAD_AMOUNT } end
   local ok, res = Money.withdraw(ctx.charid, sctx.acct.id, Constants.Currency.MONEY, amount, {
     category = Constants.Category.WITHDRAW,
-    source = 'sov_bank',
+    source = 'sovereign_banking',
     memo = ('%s fund withdrawal — %s'):format(sctx.soc.name, ctx.branch.name),
   })
   if not ok then return { ok = false, error = res } end
@@ -476,7 +476,7 @@ handlers['applyLoan'] = guarded(function(ctx, p)
   if accountId and Accounts.getAccessLevel(accountId, ctx.charid) ~= 'owner' then
     return { ok = false, error = Err.ACCESS }
   end
-  local ok, res = Loans.create(ctx.charid, amount, nil, accountId, { source = 'sov_bank' })
+  local ok, res = Loans.create(ctx.charid, amount, nil, accountId, { source = 'sovereign_banking' })
   if not ok then return { ok = false, error = res } end
   local rows = {}
   for _, l in ipairs(Loans.listFor(ctx.charid)) do rows[#rows + 1] = loanView(l) end
@@ -493,7 +493,7 @@ handlers['repayLoan'] = guarded(function(ctx, p)
   end
   local amount = p.amount ~= nil and parseAmount(p.amount) or nil
   if p.amount ~= nil and not amount then return { ok = false, error = Err.BAD_AMOUNT } end
-  local ok, res = Loans.repay(p.loanId, ctx.charid, payWith, amount, { source = 'sov_bank' })
+  local ok, res = Loans.repay(p.loanId, ctx.charid, payWith, amount, { source = 'sovereign_banking' })
   if not ok then return { ok = false, error = res } end
   local rows = {}
   for _, l in ipairs(Loans.listFor(ctx.charid)) do rows[#rows + 1] = loanView(l) end
@@ -522,13 +522,13 @@ handlers['sdbList'] = guarded(function(ctx)
 end)
 
 handlers['sdbRent'] = guarded(function(ctx, p)
-  local ok, res = SDB.rentNew(ctx.charid, tostring(p.size or ''), { source = 'sov_bank' })
+  local ok, res = SDB.rentNew(ctx.charid, tostring(p.size or ''), { source = 'sovereign_banking' })
   if not ok then return { ok = false, error = res } end
   return okWith(ctx, { result = res, boxes = sdbRows(ctx.charid) })
 end)
 
 handlers['sdbPayRent'] = guarded(function(ctx, p)
-  local ok, res = SDB.payRent(p.boxId, ctx.charid, { source = 'sov_bank' })
+  local ok, res = SDB.payRent(p.boxId, ctx.charid, { source = 'sovereign_banking' })
   if not ok then return { ok = false, error = res } end
   return okWith(ctx, { result = res, boxes = sdbRows(ctx.charid) })
 end)
@@ -548,7 +548,7 @@ handlers['goldExchange'] = guarded(function(ctx, p)
   local goldMinor = parseAmount(p.gold)
   if not goldMinor then return { ok = false, error = Err.BAD_AMOUNT } end
   local dir = p.direction == 'sell' and 'sell' or 'buy'
-  local ok, res = Gold.exchange(ctx.charid, dir, goldMinor, { source = 'sov_bank' })
+  local ok, res = Gold.exchange(ctx.charid, dir, goldMinor, { source = 'sovereign_banking' })
   if not ok then return { ok = false, error = res } end
   return okWith(ctx, { result = res, quote = Gold.quote() })
 end)
@@ -577,7 +577,7 @@ handlers['remitTax'] = guarded(function(ctx, p)
   if p.amount ~= nil and not amount then return { ok = false, error = Err.BAD_AMOUNT } end
 
   local ok, res = Business.remit(businessId, amount, ctx.charid, payWith,
-    { source = 'sov_bank' })
+    { source = 'sovereign_banking' })
   if not ok then return { ok = false, error = res } end
   return okWith(ctx, { result = res, businesses = Business.listFor(ctx.charid) })
 end)
@@ -639,7 +639,7 @@ handlers['collectionsRecord'] = guarded(function(ctx, p)
   if p.amount ~= nil and not amount then return { ok = false, error = Err.BAD_AMOUNT } end
   local done, res = Collections.record(p.billId, ctx.charid, amount,
     p.payWith == 'wallet' and 'wallet' or tonumber(p.payWith) or 'wallet',
-    { source = 'sov_bank' })
+    { source = 'sovereign_banking' })
   if not done then return { ok = false, error = res } end
   return { ok = true, data = {
     result = res, rows = queueView(Collections.queue({ limit = 50 })),
@@ -769,7 +769,7 @@ handlers['societyPayroll'] = guarded(function(ctx, p)
     entries[#entries + 1] = { charid = tostring(e.charid or ''), amount = amount }
   end
   local ok, res = Society.payroll(sctx.soc.id, entries, {
-    source = 'sov_bank',
+    source = 'sovereign_banking',
     memo = ('%s payroll — run by %s'):format(sctx.soc.name, ctx.charid),
   })
   if not ok then return { ok = false, error = res } end

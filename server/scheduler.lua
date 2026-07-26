@@ -36,7 +36,7 @@ end
 local function sweepOverdue(now)
   local cutoff = now - math.floor((Config.Collections.overdueAfterDays or 3) * DAY)
   local rows = Db.query([[
-    SELECT id FROM sov_bank_bills
+    SELECT id FROM sovereign_banking_bills
     WHERE status = 'pending' AND due_at IS NOT NULL AND due_at < FROM_UNIXTIME(?)
     LIMIT ?
   ]], { cutoff, SLICE }) or {}
@@ -47,7 +47,7 @@ local function sweepOverdue(now)
       if not bill or bill.status ~= 'pending' then return true end
       local fee = lateFeeFor(tonumber(bill.balance_remaining) or 0)
       Db.execute([[
-        UPDATE sov_bank_bills
+        UPDATE sovereign_banking_bills
         SET status = 'overdue', balance_remaining = balance_remaining + ?
         WHERE id = ?
       ]], { fee, bill.id })
@@ -67,7 +67,7 @@ local function sweepCollections(now)
     + (Config.Collections.collectionsAfterDays or 7)
   local cutoff = now - math.floor(days * DAY)
   local rows = Db.query([[
-    SELECT id FROM sov_bank_bills
+    SELECT id FROM sovereign_banking_bills
     WHERE status = 'overdue' AND due_at IS NOT NULL AND due_at < FROM_UNIXTIME(?)
     LIMIT ?
   ]], { cutoff, SLICE }) or {}
@@ -76,7 +76,7 @@ local function sweepCollections(now)
     Money.withLocks({ 'bill:' .. r.id }, function()
       local bill = Billing.get(r.id)
       if not bill or bill.status ~= 'overdue' then return true end
-      Db.execute("UPDATE sov_bank_bills SET status = 'in_collections' WHERE id = ?", { bill.id })
+      Db.execute("UPDATE sovereign_banking_bills SET status = 'in_collections' WHERE id = ?", { bill.id })
       Log.info('bill #%d entered collections', bill.id)
       Events.debtInCollections({
         charid = bill.target_charid, billId = bill.id, kind = bill.kind,
@@ -97,7 +97,7 @@ local function sweepWarrants(now)
   -- Government debt only. The kind filter is structural, not advisory:
   -- an invoice can never match this query (design §5.14 hard rule).
   local rows = Db.query([[
-    SELECT id FROM sov_bank_bills
+    SELECT id FROM sovereign_banking_bills
     WHERE status = 'in_collections'
       AND kind IN ('fine','tax')
       AND balance_remaining >= ?
@@ -110,7 +110,7 @@ local function sweepWarrants(now)
       local bill = Billing.get(r.id)
       if not bill or bill.status ~= 'in_collections' then return true end
       if Constants.GovDebt[bill.kind] ~= true then return true end -- belt & braces
-      Db.execute("UPDATE sov_bank_bills SET status = 'warrant' WHERE id = ?", { bill.id })
+      Db.execute("UPDATE sovereign_banking_bills SET status = 'warrant' WHERE id = ?", { bill.id })
       Log.warn('bill #%d escalated to WARRANT (%s, %s owed by %s)',
         bill.id, bill.kind, tostring(bill.balance_remaining), bill.target_charid)
       Events.warrantFiled({

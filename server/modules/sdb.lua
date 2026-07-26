@@ -19,7 +19,7 @@ local Err = Constants.Err
 local DAY = 86400
 
 local function stashId(boxId)
-  return ('sovbank_sdb_%d'):format(boxId)
+  return ('sovereign_banking_sdb_%d'):format(boxId)
 end
 
 local function sizeCfg(size)
@@ -35,14 +35,14 @@ function SDB.get(boxId)
   if not boxId then return nil end
   return Db.single([[
     SELECT *, UNIX_TIMESTAMP(rent_paid_until) AS paid_epoch
-    FROM sov_bank_sdb WHERE id = ?
+    FROM sovereign_banking_sdb WHERE id = ?
   ]], { boxId })
 end
 
 function SDB.listFor(charid)
   return Db.query([[
     SELECT *, UNIX_TIMESTAMP(rent_paid_until) AS paid_epoch
-    FROM sov_bank_sdb WHERE owner_id = ? ORDER BY id ASC
+    FROM sovereign_banking_sdb WHERE owner_id = ? ORDER BY id ASC
   ]], { tostring(charid) }) or {}
 end
 
@@ -58,7 +58,7 @@ local function chargeWallet(charid, amount, memo, source)
     { category = Constants.Category.SDB_RENT, memo = memo, source = source })
   if not ok2 then
     Money.walletCredit(charid, Constants.Currency.MONEY, amount, {
-      category = Constants.Category.COMPENSATION, source = 'sov_bank',
+      category = Constants.Category.COMPENSATION, source = 'sovereign_banking',
       memo = ('reversal: %s'):format(memo), silent = true,
     })
     return false, res2
@@ -86,7 +86,7 @@ function SDB.rentNew(charid, size, meta)
   local paidUntil = os.time() + math.floor((Config.SDB.rentPeriodRealDays or 7) * DAY)
   local placeholder = 'TMP-' .. Util.uuid():sub(1, 18)
   local id = Db.insert([[
-    INSERT INTO sov_bank_sdb (owner_id, size, stash_id, rent_paid_until)
+    INSERT INTO sovereign_banking_sdb (owner_id, size, stash_id, rent_paid_until)
     VALUES (?, ?, ?, FROM_UNIXTIME(?))
   ]], { charid, size, placeholder, paidUntil })
   if not id then return false, Err.INTERNAL end
@@ -94,12 +94,12 @@ function SDB.rentNew(charid, size, meta)
   local ok, err = chargeWallet(charid, price,
     ('Deposit box rent (%s)'):format(size), meta.source)
   if not ok then
-    Db.execute('DELETE FROM sov_bank_sdb WHERE id = ? AND stash_id = ?', { id, placeholder })
+    Db.execute('DELETE FROM sovereign_banking_sdb WHERE id = ? AND stash_id = ?', { id, placeholder })
     return false, err
   end
 
   local sid = stashId(id)
-  if not Db.execute('UPDATE sov_bank_sdb SET stash_id = ? WHERE id = ?', { sid, id }) then
+  if not Db.execute('UPDATE sovereign_banking_sdb SET stash_id = ? WHERE id = ?', { sid, id }) then
     Log.error('CRITICAL: sdb #%d rented and paid for by %s but the stash id could not be set',
       id, charid)
     return false, Err.INTERNAL
@@ -135,7 +135,7 @@ function SDB.payRent(boxId, charid, meta)
     -- the live row so paying early never wastes days.
     local period = math.floor((Config.SDB.rentPeriodRealDays or 7) * DAY)
     if not Db.execute([[
-      UPDATE sov_bank_sdb
+      UPDATE sovereign_banking_sdb
       SET rent_paid_until = FROM_UNIXTIME(
             GREATEST(COALESCE(UNIX_TIMESTAMP(rent_paid_until), ?), ?) + ?)
       WHERE id = ?
@@ -179,7 +179,7 @@ end
 
 --- Boot: re-register every box's stash so contents are reachable.
 function SDB.registerAll()
-  local rows = Db.query('SELECT id, stash_id, size FROM sov_bank_sdb') or {}
+  local rows = Db.query('SELECT id, stash_id, size FROM sovereign_banking_sdb') or {}
   for _, r in ipairs(rows) do
     local cfg = sizeCfg(r.size) or { slots = 10 }
     Bridge.RegisterStash(r.stash_id, ('Deposit Box %d'):format(r.id), cfg.slots)

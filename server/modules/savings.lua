@@ -48,13 +48,13 @@ function Savings.accrue(accountId)
 
   local now = os.time()
   local row = Db.single(
-    'SELECT UNIX_TIMESTAMP(last_accrued_at) AS last FROM sov_bank_savings_accrual WHERE account_id = ?',
+    'SELECT UNIX_TIMESTAMP(last_accrued_at) AS last FROM sovereign_banking_savings_accrual WHERE account_id = ?',
     { accountId })
 
   if not row then
     -- First sighting: interest starts counting from now.
     Db.execute([[
-      INSERT IGNORE INTO sov_bank_savings_accrual (account_id, last_accrued_at)
+      INSERT IGNORE INTO sovereign_banking_savings_accrual (account_id, last_accrued_at)
       VALUES (?, FROM_UNIXTIME(?))
     ]], { accountId, now })
     return 0, 0
@@ -89,7 +89,7 @@ function Savings.accrue(accountId)
   -- if a credit committed but its clock update did not.
   local function advance()
     return Db.execute([[
-      UPDATE sov_bank_savings_accrual SET last_accrued_at = FROM_UNIXTIME(?)
+      UPDATE sovereign_banking_savings_accrual SET last_accrued_at = FROM_UNIXTIME(?)
       WHERE account_id = ? AND last_accrued_at = FROM_UNIXTIME(?)
     ]], { newBase, accountId, base })
   end
@@ -102,7 +102,7 @@ function Savings.accrue(accountId)
   local ok, res = Money.accountCredit(accountId, Constants.Currency.MONEY, total, {
     category = Constants.Category.INTEREST,
     memo = ('Interest, %d week(s)'):format(periods),
-    source = 'sov_bank',
+    source = 'sovereign_banking',
     idem = ('interest:%d:%d'):format(accountId, base), -- once per base, ever
   })
   if not ok then
@@ -135,8 +135,8 @@ function Savings.sweep(limit)
   local cutoff = os.time() - psec
   local rows = Db.query([[
     SELECT a.id
-    FROM sov_bank_accounts a
-    LEFT JOIN sov_bank_savings_accrual s ON s.account_id = a.id
+    FROM sovereign_banking_accounts a
+    LEFT JOIN sovereign_banking_savings_accrual s ON s.account_id = a.id
     WHERE a.kind = 'savings' AND a.status = 'active'
       AND (s.account_id IS NULL OR s.last_accrued_at < FROM_UNIXTIME(?))
     LIMIT ?

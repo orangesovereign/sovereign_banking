@@ -142,18 +142,18 @@ local function legStatements(leg)
     -- to an account that was frozen or closed in the meantime, or the failed
     -- operation it is undoing becomes permanent.
     update = {
-      query = ('UPDATE sov_bank_accounts SET %s = %s + ? WHERE id = ?'):format(col, col),
+      query = ('UPDATE sovereign_banking_accounts SET %s = %s + ? WHERE id = ?'):format(col, col),
       values = { leg.delta, leg.acct.id },
     }
   elseif leg.delta < 0 then
     update = {
-      query = ('UPDATE sov_bank_accounts SET %s = %s + ? WHERE id = ? AND status = \'active\' AND %s + ? >= ?')
+      query = ('UPDATE sovereign_banking_accounts SET %s = %s + ? WHERE id = ? AND status = \'active\' AND %s + ? >= ?')
         :format(col, col, col),
       values = { leg.delta, leg.acct.id, leg.delta, leg.floorBal or 0 },
     }
   else
     update = {
-      query = ('UPDATE sov_bank_accounts SET %s = %s + ? WHERE id = ? AND status = \'active\'')
+      query = ('UPDATE sovereign_banking_accounts SET %s = %s + ? WHERE id = ? AND status = \'active\'')
         :format(col, col),
       values = { leg.delta, leg.acct.id },
     }
@@ -181,7 +181,7 @@ local function legStatements(leg)
   add('memo', Util.truncate(leg.memo, 140))
 
   local insert = {
-    query = ('INSERT INTO sov_bank_transactions (%s) VALUES (%s)')
+    query = ('INSERT INTO sovereign_banking_transactions (%s) VALUES (%s)')
       :format(table.concat(cols, ', '), table.concat(marks, ', ')),
     values = vals,
   }
@@ -229,7 +229,7 @@ local function commitLegs(legs)
     local f = finals[key]
     local col = Constants.CurrencyColumn[f.currency]
     local observed = tonumber(Db.scalar(
-      ('SELECT %s FROM sov_bank_accounts WHERE id = ?'):format(col), { f.accountId }))
+      ('SELECT %s FROM sovereign_banking_accounts WHERE id = ?'):format(col), { f.accountId }))
 
     -- A nil here means the VERIFICATION READ failed (Db.* returns nil on any
     -- SQL error), not that the balance is wrong. Treating that as a mismatch
@@ -251,9 +251,9 @@ local function commitLegs(legs)
         local g = finals[k]
         local c = Constants.CurrencyColumn[g.currency]
         local obs = tonumber(Db.scalar(
-          ('SELECT %s FROM sov_bank_accounts WHERE id = ?'):format(c), { g.accountId }))
+          ('SELECT %s FROM sovereign_banking_accounts WHERE id = ?'):format(c), { g.accountId }))
         if obs == g.expected then -- this account's updates applied; reverse them
-          if not Db.execute(('UPDATE sov_bank_accounts SET %s = %s - ? WHERE id = ?'):format(c, c),
+          if not Db.execute(('UPDATE sovereign_banking_accounts SET %s = %s - ? WHERE id = ?'):format(c, c),
             { g.netDelta, g.accountId }) then
             reversedAll = false
           end
@@ -266,7 +266,7 @@ local function commitLegs(legs)
 
       if reversedAll then
         for _, l in ipairs(legs) do
-          Db.execute('DELETE FROM sov_bank_transactions WHERE tx_uuid = ?', { l.uuid })
+          Db.execute('DELETE FROM sovereign_banking_transactions WHERE tx_uuid = ?', { l.uuid })
         end
       else
         Log.error('CRITICAL: op %s could not be fully reversed — ledger rows KEPT as the record. Reconcile these accounts by hand.',
@@ -420,7 +420,7 @@ local function walletOp(charid, currency, amount, sign, meta)
       Ledger.write({
         tx_uuid = Util.uuid(), currency = currency,
         direction = sign >= 0 and 'debit' or 'credit', amount = amount,
-        category = Constants.Category.COMPENSATION, source_resource = 'sov_bank',
+        category = Constants.Category.COMPENSATION, source_resource = 'sovereign_banking',
         memo = ('reversal of %s'):format(uuid),
       })
       return false, Err.WALLET_APPLY
@@ -492,7 +492,7 @@ function Money.deposit(charid, accountId, currency, amount, meta)
       local status = compAcct and select(1, commitLegs({ {
         acct = compAcct, currency = currency, delta = -amount,
         unguarded = true, uuid = Util.uuid(),
-        category = Constants.Category.COMPENSATION, source = 'sov_bank',
+        category = Constants.Category.COMPENSATION, source = 'sovereign_banking',
         memo = ('reversal of %s'):format(leg.uuid),
       } })) or nil
       if status ~= 'ok' then
@@ -557,7 +557,7 @@ function Money.withdraw(charid, accountId, currency, amount, meta)
       local status = compAcct and select(1, commitLegs({ {
         acct = compAcct, currency = currency, delta = amount,
         unguarded = true, uuid = Util.uuid(),
-        category = Constants.Category.COMPENSATION, source = 'sov_bank',
+        category = Constants.Category.COMPENSATION, source = 'sovereign_banking',
         memo = ('reversal of %s'):format(leg.uuid),
       } })) or nil
       if status ~= 'ok' then

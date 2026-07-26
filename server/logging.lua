@@ -17,7 +17,7 @@ local function write(level, fmt, ...)
   local threshold = LEVELS[Config.LogLevel or 'info'] or 2
   if LEVELS[level] < threshold then return end
   local ok, msg = pcall(string.format, fmt, ...)
-  print(('%s[sov_bank:%s]^7 %s'):format(COLORS[level], level, ok and msg or tostring(fmt)))
+  print(('%s[sovereign_banking:%s]^7 %s'):format(COLORS[level], level, ok and msg or tostring(fmt)))
 end
 
 function Log.debug(fmt, ...) write('debug', fmt, ...) end

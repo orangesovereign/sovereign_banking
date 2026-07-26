@@ -3,6 +3,7 @@ game 'rdr3'
 rdr3_warning 'I acknowledge that this is a prerelease build of RedM, and I am aware my resources *will* become incompatible once RedM ships.'
 
 author 'Sovereign'
+name 'sovereign_banking'
 description 'Sovereign Bank — central financial authority for the Sovereign suite'
 version '0.6.0'
 lua54 'yes'
@@ -40,7 +41,7 @@ server_scripts {
   'server/api/compat.lua',
   'server/scheduler.lua',
   'server/main.lua',
-  'server/test.lua', -- dev-only: console command `sovbanktest` (tech spec §14)
+  'server/test.lua', -- dev-only: console command `banking_test` (tech spec §14)
 }
 
 client_scripts {

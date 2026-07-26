@@ -2,7 +2,7 @@
   server/admin.lua — admin & operations (design §5.12).
 
   Surfaces: the /bankadmin NUI panel (permission-gated RPC in
-  server/api/callbacks.lua) and the `sovbank` server console commands.
+  server/api/callbacks.lua) and the `banking` server console commands.
 
   Every privileged mutation here goes through the money engine so it lands in
   the ledger like any other movement — an admin adjustment is a ledgered
@@ -52,12 +52,12 @@ function Admin.searchAccounts(term, limit)
   limit = math.min(tonumber(limit) or 25, 50)
   if #term == 0 then
     return Db.query([[
-      SELECT * FROM sov_bank_accounts ORDER BY id DESC LIMIT ?
+      SELECT * FROM sovereign_banking_accounts ORDER BY id DESC LIMIT ?
     ]], { limit }) or {}
   end
   local like = '%' .. term .. '%'
   return Db.query([[
-    SELECT * FROM sov_bank_accounts
+    SELECT * FROM sovereign_banking_accounts
     WHERE account_number LIKE ? OR owner_id LIKE ? OR name LIKE ?
     ORDER BY id ASC LIMIT ?
   ]], { like, like, like, limit }) or {}
@@ -74,7 +74,7 @@ function Admin.setStatus(accountId, status, actor)
     if not acct then return false, Err.NO_ACCOUNT end
     if acct.status == 'closed' then return false, Err.ACCOUNT_CLOSED end
 
-    Db.execute('UPDATE sov_bank_accounts SET status = ? WHERE id = ?', { status, acct.id })
+    Db.execute('UPDATE sovereign_banking_accounts SET status = ? WHERE id = ?', { status, acct.id })
     Log.warn('admin: %s set account %s to %s', tostring(actor), acct.account_number, status)
     Log.discord('admin', 'Account status changed', nil, {
       { name = 'Account', value = acct.account_number, inline = true },
@@ -104,7 +104,7 @@ function Admin.adjust(accountId, currency, delta, actor, reason)
   local meta = {
     category = Constants.Category.ADMIN_ADJUST,
     memo = memo,
-    source = 'sov_bank_admin',
+    source = 'sovereign_banking_admin',
   }
 
   local ok, res
@@ -135,7 +135,7 @@ function Admin.reconcileAll(limit, offset)
   limit = math.min(tonumber(limit) or 200, 500)
   offset = tonumber(offset) or 0
   local rows = Db.query(
-    'SELECT id FROM sov_bank_accounts ORDER BY id ASC LIMIT ? OFFSET ?',
+    'SELECT id FROM sovereign_banking_accounts ORDER BY id ASC LIMIT ? OFFSET ?',
     { limit, offset }) or {}
 
   local drifted = {}
@@ -164,12 +164,12 @@ function Admin.moneySupply(windowDays)
       COALESCE(SUM(balance_money), 0) AS money,
       COALESCE(SUM(balance_gold), 0)  AS gold,
       COUNT(*) AS accounts
-    FROM sov_bank_accounts WHERE status <> 'closed'
+    FROM sovereign_banking_accounts WHERE status <> 'closed'
   ]]) or {}
 
   local byOwner = Db.query([[
     SELECT owner_type, COUNT(*) AS n, COALESCE(SUM(balance_money), 0) AS money
-    FROM sov_bank_accounts WHERE status <> 'closed'
+    FROM sovereign_banking_accounts WHERE status <> 'closed'
     GROUP BY owner_type ORDER BY money DESC
   ]]) or {}
 
@@ -179,7 +179,7 @@ function Admin.moneySupply(windowDays)
            COALESCE(SUM(CASE WHEN direction = 'credit' THEN amount ELSE 0 END), 0) AS credited,
            COALESCE(SUM(CASE WHEN direction = 'debit'  THEN amount ELSE 0 END), 0) AS debited,
            COUNT(*) AS n
-    FROM sov_bank_transactions
+    FROM sovereign_banking_transactions
     WHERE currency = 0 AND created_at >= FROM_UNIXTIME(?)
     GROUP BY category ORDER BY (credited + debited) DESC LIMIT 25
   ]], { since }) or {}
@@ -197,12 +197,12 @@ function Admin.moneySupply(windowDays)
 
   local loans = Db.single([[
     SELECT COUNT(*) AS n, COALESCE(SUM(balance_remaining), 0) AS outstanding
-    FROM sov_bank_loans WHERE status IN ('active','defaulted')
+    FROM sovereign_banking_loans WHERE status IN ('active','defaulted')
   ]]) or {}
 
   local debt = Db.single([[
     SELECT COUNT(*) AS n, COALESCE(SUM(balance_remaining), 0) AS owed
-    FROM sov_bank_bills WHERE status IN ('pending','overdue','in_collections','warrant')
+    FROM sovereign_banking_bills WHERE status IN ('pending','overdue','in_collections','warrant')
   ]]) or {}
 
   return {
@@ -225,7 +225,7 @@ end
 -- Console commands (server console only — the NUI panel is the player path)
 -- ============================================================================
 
-RegisterCommand('sovbankadmin', function(source, args)
+RegisterCommand('banking_admin', function(source, args)
   if source ~= 0 then return end
   local sub = args[1]
 
@@ -245,9 +245,9 @@ RegisterCommand('sovbankadmin', function(source, args)
   elseif sub == 'reserves' then
     print(json.encode(Heist.report()))
   else
-    print('usage: sovbankadmin supply [days] | reconcile [limit] [offset] | search <term>')
-    print('       sovbankadmin freeze|unfreeze <accountId>')
-    print('       sovbankadmin adjust <accountId> <deltaMinor> [currency] [reason]')
-    print('       sovbankadmin reserves')
+    print('usage: banking_admin supply [days] | reconcile [limit] [offset] | search <term>')
+    print('       banking_admin freeze|unfreeze <accountId>')
+    print('       banking_admin adjust <accountId> <deltaMinor> [currency] [reason]')
+    print('       banking_admin reserves')
   end
 end, true)

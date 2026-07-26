@@ -213,11 +213,11 @@ Config.BusinessTax = {
 
 -- ============================================================================
 -- Admin (design §5.12) — who may open /bankadmin and force adjustments.
--- Grant the ACE in server.cfg:  add_ace group.admin sovbank.admin allow
+-- Grant the ACE in server.cfg:  add_ace group.admin banking.admin allow
 -- Or list raw identifiers (license:xxxx / steam:xxxx) as a fallback.
 -- ============================================================================
 Config.Admin = {
-  aceGroup    = 'sovbank.admin',
+  aceGroup    = 'banking.admin',
   identifiers = {},
   adjustMax   = 10000000,  -- cents; ceiling on a single force adjustment
 }

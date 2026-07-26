@@ -13,7 +13,7 @@
 Events = {}
 
 local function emit(name, payload)
-  TriggerEvent('sov_bank:server:' .. name, payload)
+  TriggerEvent('sovereign_banking:server:' .. name, payload)
 end
 
 -- ============================================================================
@@ -35,34 +35,34 @@ function Events.assetsSeized(payload)         emit('assetsSeized', payload) end 
 -- Resources that need the (ok, result) reply should call the exports instead.
 -- ============================================================================
 
-AddEventHandler('sov_bank:server:addMoney', function(charid, currency, amount, opts)
+AddEventHandler('sovereign_banking:server:addMoney', function(charid, currency, amount, opts)
   API.AddMoney(charid, currency, amount, opts)
 end)
 
-AddEventHandler('sov_bank:server:removeMoney', function(charid, currency, amount, opts)
+AddEventHandler('sovereign_banking:server:removeMoney', function(charid, currency, amount, opts)
   API.RemoveMoney(charid, currency, amount, opts)
 end)
 
-AddEventHandler('sov_bank:server:transfer', function(fromAccountId, toAccountId, currency, amount, opts)
+AddEventHandler('sovereign_banking:server:transfer', function(fromAccountId, toAccountId, currency, amount, opts)
   API.Transfer(fromAccountId, toAccountId, currency, amount, opts)
 end)
 
-AddEventHandler('sov_bank:server:addToSociety', function(society, currency, amount, opts)
+AddEventHandler('sovereign_banking:server:addToSociety', function(society, currency, amount, opts)
   API.AddToSociety(society, currency, amount, opts)
 end)
 
-AddEventHandler('sov_bank:server:removeFromSociety', function(society, currency, amount, opts)
+AddEventHandler('sovereign_banking:server:removeFromSociety', function(society, currency, amount, opts)
   API.RemoveFromSociety(society, currency, amount, opts)
 end)
 
-AddEventHandler('sov_bank:server:issueInvoice', function(issuer, targetCharid, currency, amount, memo, opts)
+AddEventHandler('sovereign_banking:server:issueInvoice', function(issuer, targetCharid, currency, amount, memo, opts)
   API.IssueInvoice(issuer, targetCharid, currency, amount, memo, opts)
 end)
 
-AddEventHandler('sov_bank:server:issueFine', function(targetCharid, currency, amount, memo, opts)
+AddEventHandler('sovereign_banking:server:issueFine', function(targetCharid, currency, amount, memo, opts)
   API.IssueFine(targetCharid, currency, amount, memo, opts)
 end)
 
-AddEventHandler('sov_bank:server:levyTax', function(targetCharid, currency, amount, memo, opts)
+AddEventHandler('sovereign_banking:server:levyTax', function(targetCharid, currency, amount, memo, opts)
   API.LevyTax(targetCharid, currency, amount, memo, opts)
 end)

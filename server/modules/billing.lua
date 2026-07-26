@@ -36,7 +36,7 @@ function Billing.get(billId)
   return Db.single([[
     SELECT *, UNIX_TIMESTAMP(due_at) AS due_epoch,
            UNIX_TIMESTAMP(created_at) AS created_epoch
-    FROM sov_bank_bills WHERE id = ?
+    FROM sovereign_banking_bills WHERE id = ?
   ]], { billId })
 end
 
@@ -47,7 +47,7 @@ function Billing.listOpenFor(charid)
   return Db.query(([[
     SELECT *, UNIX_TIMESTAMP(due_at) AS due_epoch,
            UNIX_TIMESTAMP(created_at) AS created_epoch
-    FROM sov_bank_bills
+    FROM sovereign_banking_bills
     WHERE target_charid = ? AND status IN %s
     ORDER BY created_at ASC
   ]]):format(OPEN_STATUSES), { tostring(charid) }) or {}
@@ -56,7 +56,7 @@ end
 --- Count of open bills issued by an issuer (anti-spam cap).
 local function openCountByIssuer(issuerType, issuerId)
   return tonumber(Db.scalar(([[
-    SELECT COUNT(*) FROM sov_bank_bills
+    SELECT COUNT(*) FROM sovereign_banking_bills
     WHERE issuer_type = ? AND issuer_id = ? AND status IN %s
   ]]):format(OPEN_STATUSES), { issuerType, tostring(issuerId) })) or 0
 end
@@ -91,7 +91,7 @@ function Billing.issue(kind, issuer, targetCharid, currency, amount, memo, opts)
   end
 
   local uuid = type(opts.idem) == 'string' and opts.idem or Util.uuid()
-  local existing = Db.single('SELECT id, UNIX_TIMESTAMP(due_at) AS due_epoch FROM sov_bank_bills WHERE bill_uuid = ?', { uuid })
+  local existing = Db.single('SELECT id, UNIX_TIMESTAMP(due_at) AS due_epoch FROM sovereign_banking_bills WHERE bill_uuid = ?', { uuid })
   if existing then
     return true, { billId = existing.id, dueAt = tonumber(existing.due_epoch), replayed = true }
   end
@@ -103,7 +103,7 @@ function Billing.issue(kind, issuer, targetCharid, currency, amount, memo, opts)
   -- and a trailing nil shortens the oxmysql parameter array so the bind count
   -- no longer matches the statement. Coerce rather than pass nil.
   local id = Db.insert([[
-    INSERT INTO sov_bank_bills
+    INSERT INTO sovereign_banking_bills
       (bill_uuid, issuer_type, issuer_id, target_charid, kind, currency, amount,
        balance_remaining, status, due_at, memo)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', FROM_UNIXTIME(?), ?)
@@ -182,7 +182,7 @@ function Billing.pay(billId, payerCharid, payWith, amount, meta)
         { category = category, memo = memoLine, source = meta.source })
       if not ok2 then
         Money.walletCredit(payerCharid, currency, toPay, {
-          category = Constants.Category.COMPENSATION, source = 'sov_bank',
+          category = Constants.Category.COMPENSATION, source = 'sovereign_banking',
           memo = ('reversal: %s'):format(memoLine), silent = true,
         })
         return false, res2
@@ -199,10 +199,10 @@ function Billing.pay(billId, payerCharid, payWith, amount, meta)
     local closed = newRemaining <= 0
     if closed then
       Db.execute(
-        "UPDATE sov_bank_bills SET balance_remaining = 0, status = 'paid', paid_at = NOW() WHERE id = ?",
+        "UPDATE sovereign_banking_bills SET balance_remaining = 0, status = 'paid', paid_at = NOW() WHERE id = ?",
         { bill.id })
     else
-      Db.execute('UPDATE sov_bank_bills SET balance_remaining = ? WHERE id = ?',
+      Db.execute('UPDATE sovereign_banking_bills SET balance_remaining = ? WHERE id = ?',
         { newRemaining, bill.id })
     end
 
@@ -233,7 +233,7 @@ function Billing.cancel(billId, meta)
     if not bill then return false, Err.NO_BILL end
     if bill.status == 'paid' or bill.status == 'cancelled' then return false, Err.BILL_CLOSED end
     local wasWarrant = bill.status == 'warrant'
-    Db.execute("UPDATE sov_bank_bills SET status = 'cancelled' WHERE id = ?", { bill.id })
+    Db.execute("UPDATE sovereign_banking_bills SET status = 'cancelled' WHERE id = ?", { bill.id })
     if Collections and Collections.releaseLiensForBill then
       Collections.releaseLiensForBill(bill.id)
     end

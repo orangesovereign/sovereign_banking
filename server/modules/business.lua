@@ -35,7 +35,7 @@ function Business.getLedger(businessId)
     SELECT *, UNIX_TIMESTAMP(next_due_at) AS due_epoch,
            UNIX_TIMESTAMP(last_assessed_at) AS assessed_epoch,
            UNIX_TIMESTAMP(last_remit_at) AS remit_epoch
-    FROM sov_bank_business_tax WHERE business_id = ?
+    FROM sovereign_banking_business_tax WHERE business_id = ?
   ]], { tostring(businessId) })
 end
 
@@ -43,7 +43,7 @@ end
 function Business.account(businessId)
   if not businessId then return nil end
   return Db.single([[
-    SELECT * FROM sov_bank_accounts
+    SELECT * FROM sovereign_banking_accounts
     WHERE owner_type = 'business' AND owner_id = ? AND status <> 'closed'
     LIMIT 1
   ]], { tostring(businessId) })
@@ -54,7 +54,7 @@ function Business.owner(businessId)
   local acct = Business.account(businessId)
   if not acct then return nil end
   local row = Db.single([[
-    SELECT charidentifier FROM sov_bank_access
+    SELECT charidentifier FROM sovereign_banking_access
     WHERE account_id = ? AND access_level = 'owner' LIMIT 1
   ]], { acct.id })
   return row and tostring(row.charidentifier) or nil
@@ -89,10 +89,10 @@ function Business.register(businessId, ownerCharid, buildingPrice, opts)
 
   -- The owner's access row is what makes the account visible at the teller.
   Db.execute([[
-    INSERT INTO sov_bank_access (account_id, charidentifier, access_level, granted_by)
+    INSERT INTO sovereign_banking_access (account_id, charidentifier, access_level, granted_by)
     VALUES (?, ?, 'owner', ?)
     ON DUPLICATE KEY UPDATE access_level = 'owner'
-  ]], { acct.id, ownerCharid, opts.source or 'sov_bank' })
+  ]], { acct.id, ownerCharid, opts.source or 'sovereign_banking' })
 
   local rate = tonumber(opts.licenseRate) or tonumber(cfg().licenseRate) or 0.25
   local nextDue = os.time() + math.floor((tonumber(cfg().assessEveryRealDays) or 7) * DAY)
@@ -100,12 +100,12 @@ function Business.register(businessId, ownerCharid, buildingPrice, opts)
   local existing = Business.getLedger(businessId)
   if existing then
     Db.execute([[
-      UPDATE sov_bank_business_tax SET building_price = ?, license_rate = ?
+      UPDATE sovereign_banking_business_tax SET building_price = ?, license_rate = ?
       WHERE business_id = ?
     ]], { buildingPrice, rate, businessId })
   else
     Db.execute([[
-      INSERT INTO sov_bank_business_tax
+      INSERT INTO sovereign_banking_business_tax
         (business_id, building_price, license_rate, next_due_at)
       VALUES (?, ?, ?, FROM_UNIXTIME(?))
     ]], { businessId, buildingPrice, rate, nextDue })
@@ -145,7 +145,7 @@ function Business.assess(businessId, opts)
     -- matches the sweep every tick forever and starves real businesses.
     if dueEpoch then
       Db.execute([[
-        UPDATE sov_bank_business_tax SET last_assessed_at = NOW(), next_due_at = FROM_UNIXTIME(?)
+        UPDATE sovereign_banking_business_tax SET last_assessed_at = NOW(), next_due_at = FROM_UNIXTIME(?)
         WHERE business_id = ? AND next_due_at = FROM_UNIXTIME(?)
       ]], { nextDue, businessId, dueEpoch })
     end
@@ -156,14 +156,14 @@ function Business.assess(businessId, opts)
   local affected
   if dueEpoch then
     affected = Db.execute([[
-      UPDATE sov_bank_business_tax
+      UPDATE sovereign_banking_business_tax
       SET assessed = assessed + ?, balance_owed = balance_owed + ?,
           last_assessed_at = NOW(), next_due_at = FROM_UNIXTIME(?)
       WHERE business_id = ? AND next_due_at = FROM_UNIXTIME(?)
     ]], { amount, amount, nextDue, businessId, dueEpoch })
   else
     affected = Db.execute([[
-      UPDATE sov_bank_business_tax
+      UPDATE sovereign_banking_business_tax
       SET assessed = assessed + ?, balance_owed = balance_owed + ?,
           last_assessed_at = NOW(), next_due_at = FROM_UNIXTIME(?)
       WHERE business_id = ? AND next_due_at IS NULL
@@ -180,7 +180,7 @@ function Business.assess(businessId, opts)
     tx_uuid = Util.uuid(), currency = Constants.Currency.MONEY,
     direction = 'debit', amount = amount,
     category = Constants.Category.TAX_ASSESSED,
-    source_resource = opts.source or 'sov_bank',
+    source_resource = opts.source or 'sovereign_banking',
     memo = ('Business licence tax assessed — %s'):format(businessId),
   })
 
@@ -225,7 +225,7 @@ function Business.remit(businessId, amount, payerCharid, payWith, meta)
         { category = Constants.Category.TAX_REMIT, memo = memoLine, source = meta.source })
       if not ok2 then
         local backOk = Money.walletCredit(payerCharid, Constants.Currency.MONEY, toPay, {
-          category = Constants.Category.COMPENSATION, source = 'sov_bank',
+          category = Constants.Category.COMPENSATION, source = 'sovereign_banking',
           memo = ('reversal: %s'):format(memoLine), silent = true,
         })
         if not backOk then
@@ -244,7 +244,7 @@ function Business.remit(businessId, amount, payerCharid, payWith, meta)
 
     -- The money has moved; if this fails the business is owed a correction.
     if not Db.execute([[
-      UPDATE sov_bank_business_tax
+      UPDATE sovereign_banking_business_tax
       SET remitted = remitted + ?, balance_owed = GREATEST(balance_owed - ?, 0),
           last_remit_at = NOW()
       WHERE business_id = ?
@@ -263,8 +263,8 @@ function Business.listFor(charid)
   local rows = Db.query([[
     SELECT a.owner_id AS business_id, a.id AS account_id, a.account_number,
            a.name, a.balance_money, x.access_level
-    FROM sov_bank_accounts a
-    JOIN sov_bank_access x ON x.account_id = a.id
+    FROM sovereign_banking_accounts a
+    JOIN sovereign_banking_access x ON x.account_id = a.id
     WHERE a.owner_type = 'business' AND a.status <> 'closed'
       AND x.charidentifier = ? AND x.access_level IN ('owner','admin')
     ORDER BY a.id ASC
@@ -300,7 +300,7 @@ end
 --- Assess every business whose period has elapsed.
 function Business.sweepAssessments(limit)
   local rows = Db.query([[
-    SELECT business_id FROM sov_bank_business_tax
+    SELECT business_id FROM sovereign_banking_business_tax
     WHERE next_due_at IS NOT NULL AND next_due_at <= NOW() LIMIT ?
   ]], { limit or 25 }) or {}
   for _, r in ipairs(rows) do
@@ -327,7 +327,7 @@ function Business.sweepDelinquent(limit)
 
   local rows = Db.query([[
     SELECT business_id, balance_owed, UNIX_TIMESTAMP(last_assessed_at) AS assessed_epoch
-    FROM sov_bank_business_tax
+    FROM sovereign_banking_business_tax
     WHERE balance_owed > 0 AND last_assessed_at IS NOT NULL
       AND last_assessed_at < FROM_UNIXTIME(?)
     LIMIT ?
@@ -346,7 +346,7 @@ function Business.sweepDelinquent(limit)
         owner, Constants.Currency.MONEY, tonumber(r.balance_owed),
         ('Unremitted licence tax — %s'):format(r.business_id),
         {
-          source = 'sov_bank',
+          source = 'sovereign_banking',
           idem = key,
           dueDays = 0, -- already overdue; the sweep tiers it immediately
         })

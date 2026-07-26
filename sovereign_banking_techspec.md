@@ -1,7 +1,7 @@
 # Sovereign Bank — Technical Specification
 
-**Companion to:** `sovereign_bank_spec.md` (design & feature spec, v2.6)
-**Resource name:** `sov_bank`
+**Companion to:** `sovereign_banking_spec.md` (design & feature spec, v2.6)
+**Resource name:** `sovereign_banking`
 **Platform:** RedM (CitizenFX / Cfx.re) · **Framework:** VORP Core
 **Language:** Lua (server + client) · **UI:** NUI (HTML/CSS/JS)
 **DB:** MySQL via `oxmysql`
@@ -43,7 +43,7 @@
 ## 2. Resource Layout
 
 ```
-sov_bank/
+sovereign_banking/
 ├── fxmanifest.lua
 ├── config/
 │   ├── config.lua            # tunables (design §8)
@@ -163,7 +163,7 @@ depends on modules; nothing depends on the API layer internally.
 All amounts `BIGINT` minor units. All timers `DATETIME`/epoch. InnoDB, utf8mb4.
 
 ```sql
-CREATE TABLE IF NOT EXISTS sov_bank_accounts (
+CREATE TABLE IF NOT EXISTS sovereign_banking_accounts (
   id                INT UNSIGNED NOT NULL AUTO_INCREMENT,
   account_number    VARCHAR(24)  NOT NULL,
   owner_type        ENUM('character','society','business','joint','system') NOT NULL,
@@ -183,7 +183,7 @@ CREATE TABLE IF NOT EXISTS sov_bank_accounts (
   KEY idx_status (status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-CREATE TABLE IF NOT EXISTS sov_bank_access (
+CREATE TABLE IF NOT EXISTS sovereign_banking_access (
   id             INT UNSIGNED NOT NULL AUTO_INCREMENT,
   account_id     INT UNSIGNED NOT NULL,
   charidentifier VARCHAR(64) NOT NULL,
@@ -194,10 +194,10 @@ CREATE TABLE IF NOT EXISTS sov_bank_access (
   UNIQUE KEY uq_acct_char (account_id, charidentifier),
   KEY idx_char (charidentifier),
   CONSTRAINT fk_access_acct FOREIGN KEY (account_id)
-    REFERENCES sov_bank_accounts(id) ON DELETE CASCADE
+    REFERENCES sovereign_banking_accounts(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-CREATE TABLE IF NOT EXISTS sov_bank_transactions (
+CREATE TABLE IF NOT EXISTS sovereign_banking_transactions (
   id                       BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   tx_uuid                  CHAR(36) NOT NULL,
   account_id               INT UNSIGNED NULL,
@@ -216,7 +216,7 @@ CREATE TABLE IF NOT EXISTS sov_bank_transactions (
   KEY idx_category (category)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-CREATE TABLE IF NOT EXISTS sov_bank_loans (
+CREATE TABLE IF NOT EXISTS sovereign_banking_loans (
   id                INT UNSIGNED NOT NULL AUTO_INCREMENT,
   charidentifier    VARCHAR(64) NOT NULL,
   account_id        INT UNSIGNED NOT NULL,
@@ -234,15 +234,15 @@ CREATE TABLE IF NOT EXISTS sov_bank_loans (
   KEY idx_status (status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-CREATE TABLE IF NOT EXISTS sov_bank_savings_accrual (
+CREATE TABLE IF NOT EXISTS sovereign_banking_savings_accrual (
   account_id       INT UNSIGNED NOT NULL,
   last_accrued_at  DATETIME NOT NULL,
   PRIMARY KEY (account_id),
   CONSTRAINT fk_accrual_acct FOREIGN KEY (account_id)
-    REFERENCES sov_bank_accounts(id) ON DELETE CASCADE
+    REFERENCES sovereign_banking_accounts(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-CREATE TABLE IF NOT EXISTS sov_bank_sdb (
+CREATE TABLE IF NOT EXISTS sovereign_banking_sdb (
   id             INT UNSIGNED NOT NULL AUTO_INCREMENT,
   account_id     INT UNSIGNED NULL,
   owner_id       VARCHAR(64) NOT NULL,
@@ -255,7 +255,7 @@ CREATE TABLE IF NOT EXISTS sov_bank_sdb (
   KEY idx_owner (owner_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-CREATE TABLE IF NOT EXISTS sov_bank_bills (
+CREATE TABLE IF NOT EXISTS sovereign_banking_bills (
   id                INT UNSIGNED NOT NULL AUTO_INCREMENT,
   bill_uuid         CHAR(36) NOT NULL,
   issuer_type       ENUM('character','society','system') NOT NULL,
@@ -278,7 +278,7 @@ CREATE TABLE IF NOT EXISTS sov_bank_bills (
   KEY idx_kind (kind)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-CREATE TABLE IF NOT EXISTS sov_bank_business_tax (
+CREATE TABLE IF NOT EXISTS sovereign_banking_business_tax (
   business_id     VARCHAR(64) NOT NULL,
   building_price  BIGINT NOT NULL,             -- tax basis (design §5.15)
   license_rate    DECIMAL(5,4) NOT NULL DEFAULT 0.2500,
@@ -291,7 +291,7 @@ CREATE TABLE IF NOT EXISTS sov_bank_business_tax (
   PRIMARY KEY (business_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-CREATE TABLE IF NOT EXISTS sov_bank_seizures (
+CREATE TABLE IF NOT EXISTS sovereign_banking_seizures (
   id               INT UNSIGNED NOT NULL AUTO_INCREMENT,
   bill_id          INT UNSIGNED NOT NULL,
   collector_charid VARCHAR(64) NOT NULL,
@@ -306,7 +306,7 @@ CREATE TABLE IF NOT EXISTS sov_bank_seizures (
   KEY idx_debtor (debtor_charid)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-CREATE TABLE IF NOT EXISTS sov_bank_liens (
+CREATE TABLE IF NOT EXISTS sovereign_banking_liens (
   id             INT UNSIGNED NOT NULL AUTO_INCREMENT,
   bill_id        INT UNSIGNED NULL,           -- debt the lien secures (if any)
   account_id     INT UNSIGNED NULL,           -- lien against an account
@@ -322,7 +322,7 @@ CREATE TABLE IF NOT EXISTS sov_bank_liens (
   KEY idx_bill (bill_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-CREATE TABLE IF NOT EXISTS sov_bank_reserves (
+CREATE TABLE IF NOT EXISTS sovereign_banking_reserves (
   branch_id        VARCHAR(48) NOT NULL,
   currency         TINYINT NOT NULL DEFAULT 0,
   balance          BIGINT NOT NULL DEFAULT 0,   -- physical cash on hand
@@ -332,7 +332,7 @@ CREATE TABLE IF NOT EXISTS sov_bank_reserves (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 ```
 
-**System accounts** (design §5.11): seed rows in `sov_bank_accounts` with
+**System accounts** (design §5.11): seed rows in `sovereign_banking_accounts` with
 `owner_type='system'` and reserved `owner_id`s — `SYS-INSURANCE` (fee sink /
 insurance fund) and `SYS-GOV` (government fund for taxes/fines). Created idempotently
 on first boot in `server/main.lua`.
@@ -359,7 +359,7 @@ Every mutating engine/module/export function returns `(ok, result)`:
 
 ### 5.3 Idempotency
 - Every mutation carries a `tx_uuid` (`opts.idem` or a generated v4 UUID).
-- Before applying, the engine checks `sov_bank_transactions.tx_uuid`; if present,
+- Before applying, the engine checks `sovereign_banking_transactions.tx_uuid`; if present,
   it returns the original stored result (`{txId, balanceAfter, replayed=true}`)
   without re-applying. The `UNIQUE` constraint is the backstop against races.
 
@@ -383,8 +383,8 @@ function Money.move(spec)      -- spec: {charid, accountId, currency, delta, cat
     MySQL.transaction(function(txn)
       -- 1. re-read authoritative balance INSIDE the txn (row lock: SELECT ... FOR UPDATE)
       -- 2. validate: frozen? sufficient funds (or within credit_limit if allowNeg)?
-      -- 3. UPDATE sov_bank_accounts SET balance_x = balance_x + delta
-      -- 4. INSERT sov_bank_transactions (tx_uuid, ..., balance_after)
+      -- 3. UPDATE sovereign_banking_accounts SET balance_x = balance_x + delta
+      -- 4. INSERT sovereign_banking_transactions (tx_uuid, ..., balance_after)
     end)                        -- COMMIT here; DB is now source of truth
 
     -- 5. If the op also touches the wallet (deposit/withdraw), apply via bridge:
@@ -474,7 +474,7 @@ convention (§5.2). Summary contract table:
 | `GetTransactions` | accountId, filterOpts | list |
 
 ### 7.2 Net events (`server/api/events.lua`) — design §6.2
-- Inbound wrappers: `sov_bank:server:addMoney`, `:removeMoney`, `:transfer`, … —
+- Inbound wrappers: `sovereign_banking:server:addMoney`, `:removeMoney`, `:transfer`, … —
   thin `TriggerEvent` shims over the exports for event-style callers.
 - Outbound broadcasts (bank → listeners): `transactionCompleted`,
   `balanceChanged`, `loanDefaulted`, `accountFrozen`, `billPaid`, `debtOverdue`,
@@ -483,7 +483,7 @@ convention (§5.2). Summary contract table:
 ### 7.3 VORP callbacks (`server/api/callbacks.lua`) — design §6.3
 Client→server with reply, **every one proximity-gated**: the handler resolves the
 player's server-side coords and rejects (`ERR_NOT_AT_BRANCH`) if not within
-`Config.Locations` teller range. Names: `sov_bank:getAccounts`, `:deposit`,
+`Config.Locations` teller range. Names: `sovereign_banking:getAccounts`, `:deposit`,
 `:withdraw`, `:transfer`, `:openLoan`, `:repayLoan`, `:sdb*`, `:goldExchange`,
 `:getStatements`, `:business*`, `:remitTax`, `:society*`, `:collections*`.
 
@@ -492,7 +492,7 @@ player's server-side coords and rejects (`ERR_NOT_AT_BRANCH`) if not within
 ## 8. Key Data Flows (sequences)
 
 ### 8.1 Deposit (wallet → bank)
-1. Client at teller → `TriggerServerCallback('sov_bank:deposit', cb, accountId, currency, amount)`.
+1. Client at teller → `TriggerServerCallback('sovereign_banking:deposit', cb, accountId, currency, amount)`.
 2. Callback: proximity check → resolve charid → access check (`deposit`+ on account).
 3. `Money.move{charid, accountId, currency, delta=+amount, category='deposit', wallet='remove'}`.
 4. Engine: lock → idempotency → SQL txn (credit account, ledger row) → commit →
@@ -528,7 +528,7 @@ player's server-side coords and rejects (`ERR_NOT_AT_BRANCH`) if not within
 3. `SeizeAssets`: server re-verifies debt → `ValuateItems` (via `Config.Collections.
    seizure.valuation`) → cap to `balance_remaining`+fees → remove items (inventory) →
    credit proceeds to creditor via `Money.move` → apply to bill → return surplus to
-   debtor → write `sov_bank_seizures` row → fire `assetsSeized`. Shortfall keeps
+   debtor → write `sovereign_banking_seizures` row → fire `assetsSeized`. Shortfall keeps
    the bill open (govt debt may escalate).
 
 ### 8.6 Business tax (design §5.15)
@@ -545,7 +545,7 @@ player's server-side coords and rejects (`ERR_NOT_AT_BRANCH`) if not within
 
 ### 8.7 Branch heist (design §5.11)
 - Heist script (owns the action) → `ClaimBranchReserve(branchId, 0, opts)`.
-- Engine: read `sov_bank_reserves`, compute `looted = reserve × opts.fraction`
+- Engine: read `sovereign_banking_reserves`, compute `looted = reserve × opts.fraction`
   (payout randomization varies per call via server RNG in the heist script, passed
   in `opts` and clamped to `payoutRange`), cap to reserve, decrement reserve under
   a `reserve:<branch>` mutex with a `balance >= looted` guard, credit looters'
@@ -609,7 +609,7 @@ same period.
   proximity, amount, and balance inside the transaction. (§5.5, §7.3)
 - **Proximity gating:** all account operations require a server-verified teller
   distance check; wallet-only payouts (job wages) are exempt (design §6.1 note).
-- **Access control:** every account op checks `sov_bank_access` level; society/
+- **Access control:** every account op checks `sovereign_banking_access` level; society/
   business ops check role/whitelist via bridge.
 - **Seizure guardrails:** `SeizeAssets` requires a verified open tier-2 debt, caps
   to owed+fees, honors exempt-items, and logs every seizure (design §5.14).
@@ -669,7 +669,7 @@ same period.
 - Callbacks reject when not at a branch; access-level enforcement; rate-limit trips.
 - Fuzz amounts (negative, float, huge) → `ERR_BAD_AMOUNT`, no state change.
 
-Recommend a `sov_bank_test` dev-only resource driving the exports headlessly, plus
+Recommend a `sovereign_banking_test` dev-only resource driving the exports headlessly, plus
 a manual QA checklist for NUI flows.
 
 ---
@@ -677,7 +677,7 @@ a manual QA checklist for NUI flows.
 ## 15. Deployment & Migration
 
 1. Import `sql/install.sql`.
-2. Ensure `vorp_core`, `oxmysql`, `vorp_inventory` start **before** `sov_bank`.
+2. Ensure `vorp_core`, `oxmysql`, `vorp_inventory` start **before** `sovereign_banking`.
 3. Configure `config/config.lua` + `config/locations.lua` (branches, rates, tax,
    heist reserves).
 4. First boot seeds `SYS-INSURANCE` and `SYS-GOV` system accounts and per-branch
@@ -685,7 +685,7 @@ a manual QA checklist for NUI flows.
    (`Config.ReservedNumbers`): system rows are pinned to ids/numbers inside the
    range (`SVB-0000001` gov, `SVB-0000002` insurance) and the table's
    AUTO_INCREMENT starts at 1001, so organic accounts brand from `SVB-0001001`.
-5. Schema versioning: a `sov_bank_meta(version)` row; `main.lua` runs ordered
+5. Schema versioning: a `sovereign_banking_meta(version)` row; `main.lua` runs ordered
    migration steps when the code version exceeds the stored version.
 
 ---
@@ -706,6 +706,6 @@ a manual QA checklist for NUI flows.
 
 ---
 
-*End of technical specification. Pairs with `sovereign_bank_spec.md` (design). Keep
+*End of technical specification. Pairs with `sovereign_banking_spec.md` (design). Keep
 both in lockstep: a design change updates the feature spec first, then this doc's
 affected sections (schema, exports, flows).*

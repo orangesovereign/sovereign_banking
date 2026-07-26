@@ -1,16 +1,18 @@
-# Sovereign Bank (`sov_bank`)
+# Sovereign Bank (`sovereign_banking`)
 
 Central financial authority for the Sovereign script suite. RedM · VORP Core ·
 oxmysql. Period-authentic to 1896: banking is a place you ride to — no ATMs, no
 mobile ledgers, no cheques.
 
-**Design docs:** [`sovereign_bank_spec.md`](sovereign_bank_spec.md) (features) ·
-[`sovereign_bank_techspec.md`](sovereign_bank_techspec.md) (engineering).
+**Design docs:** [`sovereign_banking_spec.md`](sovereign_banking_spec.md) (features) ·
+[`sovereign_banking_techspec.md`](sovereign_banking_techspec.md) (engineering).
 **Bringing it into service:** [`TESTING.md`](TESTING.md) — three interactive
 testing ledgers (B1 Foundation · B2 Commerce & Credit · B3 Enforcement & Ops).
 
-> **Folder name matters:** other scripts call `exports.sov_bank:...`, so install
-> this resource as `sov_bank` (clone/rename the folder), not `sovereign_banking`.
+> **Folder name matters:** exports resolve by resource name, so this must be
+> installed as `sovereign_banking` — matching the rest of the county
+> (`sovereign_medical`, `sovereign_stores`, `sovereign_stables`). Events are
+> `sovereign_banking:*` and tables are `sovereign_banking_*` for the same reason.
 
 ## Status
 
@@ -30,13 +32,13 @@ Ledger fills in when `sovereign_stores` calls `RegisterBusiness` on a purchase.
 
 ## Install
 
-1. Ensure `vorp_core`, `oxmysql`, and `vorp_inventory` start **before** `sov_bank`.
-2. Drop the resource in as `sov_bank` and add `ensure sov_bank` after them.
+1. Ensure `vorp_core`, `oxmysql`, and `vorp_inventory` start **before** `sovereign_banking`.
+2. Drop the resource in as `sovereign_banking` and add `ensure sovereign_banking` after them.
 3. Schema installs itself on first boot (`sql/install.sql`, idempotent). To
    import manually instead, run the file and set `Config.AutoRunSchema = false`.
 4. First boot seeds system accounts, society accounts, and branch cash reserves.
 5. Grant yourself the admin panel in `server.cfg`:
-   `add_ace group.admin sovbank.admin allow`
+   `add_ace group.admin banking.admin allow`
 
 ### Configure before going live
 
@@ -55,7 +57,7 @@ Ledger fills in when `sovereign_stores` calls `RegisterBusiness` on a purchase.
 - **Wallet** (cash in hand) is owned by VORP; **bank balances** are owned by this
   resource. Wallet payouts work anywhere — a rancher gets paid in the field —
   but account operations require standing at a teller, verified server-side.
-- Every movement writes an immutable row to `sov_bank_transactions`.
+- Every movement writes an immutable row to `sovereign_banking_transactions`.
   `Reconcile(accountId)` proves balance == ledger sum; the scheduler audits a
   rolling slice of accounts continuously.
 - **Account numbers 1–1000 are reserved for government accounts**
@@ -72,25 +74,25 @@ throws. Error codes are strings like `ERR_INSUFFICIENT_FUNDS` (see
 
 ```lua
 -- Pay a wage in cash (works anywhere — no branch needed):
-local ok, res = exports.sov_bank:AddMoney(charid, 0, 2500, {
+local ok, res = exports.sovereign_banking:AddMoney(charid, 0, 2500, {
   reason = 'payroll',
   memo   = 'Herding wages',
   idem   = jobRunUuid,   -- optional: retries with the same key are no-ops
 })
 
 -- Charge for goods from the wallet; fails cleanly if they can't pay:
-local ok, err = exports.sov_bank:RemoveMoney(charid, 0, 1250, { reason = 'purchase' })
+local ok, err = exports.sovereign_banking:RemoveMoney(charid, 0, 1250, { reason = 'purchase' })
 if not ok then print('payment failed:', err) end
 
 -- Credit straight into their bank account instead:
-exports.sov_bank:AddMoney(charid, 0, 50000, { target = 'bank', reason = 'loan_disburse' })
+exports.sovereign_banking:AddMoney(charid, 0, 50000, { target = 'bank', reason = 'loan_disburse' })
 
-exports.sov_bank:CanAfford(charid, 0, 1250)          -- boolean, no mutation
-exports.sov_bank:GetWalletBalance(charid, 0)         -- nil if offline
-exports.sov_bank:GetBankBalance(accountId, 0)
-exports.sov_bank:GetPrimaryAccount(charid)
-exports.sov_bank:Transfer(fromAcctId, toAcctId, 0, 10000, { memo = 'Cattle sale' })
-exports.sov_bank:GetTransactions(accountId, { limit = 25, category = 'transfer' })
+exports.sovereign_banking:CanAfford(charid, 0, 1250)          -- boolean, no mutation
+exports.sovereign_banking:GetWalletBalance(charid, 0)         -- nil if offline
+exports.sovereign_banking:GetBankBalance(accountId, 0)
+exports.sovereign_banking:GetPrimaryAccount(charid)
+exports.sovereign_banking:Transfer(fromAcctId, toAcctId, 0, 10000, { memo = 'Cattle sale' })
+exports.sovereign_banking:GetTransactions(accountId, { limit = 25, category = 'transfer' })
 ```
 
 **The `opts` table** (shared by mutating calls): `reason` (ledger category),
@@ -101,13 +103,13 @@ exports.sov_bank:GetTransactions(accountId, { limit = 25, category = 'transfer' 
 ### Societies & payroll — for the lawman, medical, and job scripts
 
 ```lua
-exports.sov_bank:GetSocietyBalance('lawman', 0)
-exports.sov_bank:AddToSociety('medical', 0, 5000, { reason = 'fee', memo = 'Doctoring' })
-exports.sov_bank:RemoveFromSociety('lawman', 0, 2500, { reason = 'purchase' })
+exports.sovereign_banking:GetSocietyBalance('lawman', 0)
+exports.sovereign_banking:AddToSociety('medical', 0, 5000, { reason = 'fee', memo = 'Doctoring' })
+exports.sovereign_banking:RemoveFromSociety('lawman', 0, 2500, { reason = 'purchase' })
 
 -- Atomic batch: society debited once, every hand's BANK ACCOUNT credited.
 -- Works for offline characters — the wage waits at the counter.
-local ok, res = exports.sov_bank:RunPayroll('lawman', {
+local ok, res = exports.sovereign_banking:RunPayroll('lawman', {
   { charid = '42', amount = 25000, memo = 'Weekly wage' },
   { charid = '77', amount = 15000 },
 }, { idem = payrollRunUuid })
@@ -121,18 +123,18 @@ the only debts that can reach a warrant (design §5.14 hard rule).
 
 ```lua
 -- Civil invoice from a player or a society; proceeds go to the issuer.
-exports.sov_bank:IssueInvoice(issuerCharid, targetCharid, 0, 12500, 'Cattle feed')
-exports.sov_bank:IssueInvoice({ type = 'society', id = 'medical' }, targetCharid,
+exports.sovereign_banking:IssueInvoice(issuerCharid, targetCharid, 0, 12500, 'Cattle feed')
+exports.sovereign_banking:IssueInvoice({ type = 'society', id = 'medical' }, targetCharid,
   0, 8000, 'Surgery')
 
 -- Government debt; proceeds go to SYS-GOV.
-exports.sov_bank:IssueFine(targetCharid, 0, 5000, 'Disturbing the peace',
+exports.sovereign_banking:IssueFine(targetCharid, 0, 5000, 'Disturbing the peace',
   { idem = citationUuid })
-exports.sov_bank:LevyTax(targetCharid, 0, 20000, 'Property tax, Q2')
+exports.sovereign_banking:LevyTax(targetCharid, 0, 20000, 'Property tax, Q2')
 
-exports.sov_bank:GetDebtStatus(charid)   -- { tier = 0..3, totalOwed, bills = {...} }
-exports.sov_bank:PayBill(billId, charid, 'wallet')   -- e.g. auto-debit at booking
-exports.sov_bank:CancelBill(billId)
+exports.sovereign_banking:GetDebtStatus(charid)   -- { tier = 0..3, totalOwed, bills = {...} }
+exports.sovereign_banking:PayBill(billId, charid, 'wallet')   -- e.g. auto-debit at booking
+exports.sovereign_banking:CancelBill(billId)
 ```
 
 ### Lawman handoff
@@ -141,12 +143,12 @@ The bank runs tiers 0–2 alone. Lawmen hear about a debt at exactly one moment 
 when government debt crosses the arrestable threshold:
 
 ```lua
-AddEventHandler('sov_bank:server:warrantFiled', function(d)
+AddEventHandler('sovereign_banking:server:warrantFiled', function(d)
   -- d = { charid, billId, kind, amount, reason }   kind is only 'fine' or 'tax'
   Warrants.file(d.charid, d.amount, d.reason)
 end)
 
-AddEventHandler('sov_bank:server:billPaid', function(d)
+AddEventHandler('sovereign_banking:server:billPaid', function(d)
   if d.wasWarrant then Warrants.clear(d.payerCharid, d.billId) end
 end)
 ```
@@ -161,9 +163,9 @@ reachable is the branch's physical cash reserve; that guarantee is structural,
 not a config toggle.
 
 ```lua
-local onHand = exports.sov_bank:GetBranchReserve('valentine', 0)
+local onHand = exports.sovereign_banking:GetBranchReserve('valentine', 0)
 
-local ok, res = exports.sov_bank:ClaimBranchReserve('valentine', 0, {
+local ok, res = exports.sovereign_banking:ClaimBranchReserve('valentine', 0, {
   fraction = math.random(40, 80) / 100,  -- your RNG; clamped to Config.Heist.payoutRange
   looters  = { '42', '77' },             -- split into their wallets
   idem     = heistUuid,
@@ -179,14 +181,14 @@ whether or not the shop sells a thing.
 
 ```lua
 -- On property purchase (the payment should route through the bank anyway):
-exports.sov_bank:RegisterBusiness('valentine_gunsmith', ownerCharid, 200000, {
+exports.sovereign_banking:RegisterBusiness('valentine_gunsmith', ownerCharid, 200000, {
   name = 'Valentine Gunsmith',
 })
 -- Opens a business account, grants the owner access, and sets the tax basis.
 
-exports.sov_bank:GetBusinessAccount('valentine_gunsmith')  -- account row
-exports.sov_bank:GetTaxLedger('valentine_gunsmith')        -- assessed/remitted/owed/due
-exports.sov_bank:IsBusinessOwner(charid, 'valentine_gunsmith')
+exports.sovereign_banking:GetBusinessAccount('valentine_gunsmith')  -- account row
+exports.sovereign_banking:GetTaxLedger('valentine_gunsmith')        -- assessed/remitted/owed/due
+exports.sovereign_banking:IsBusinessOwner(charid, 'valentine_gunsmith')
 ```
 
 The scheduler assesses each period automatically and, once a balance goes
@@ -196,24 +198,24 @@ collections pipeline. Owners settle at the teller under **Business & Tax**.
 ### Collections & seizure — for the Tax Collector and restraint scripts
 
 ```lua
-exports.sov_bank:GetCollectionsQueue({ kind = 'tax', limit = 50 })
-exports.sov_bank:RecordCollection(billId, 5000, {
+exports.sovereign_banking:GetCollectionsQueue({ kind = 'tax', limit = 50 })
+exports.sovereign_banking:RecordCollection(billId, 5000, {
   collectorCharid = collector, payWith = 'wallet',
 })
-exports.sov_bank:PlaceLien(debtorCharid, accountId, 10000, { billId = billId })
-exports.sov_bank:StartEscort(collectorCharid, debtorCharid, billId)
+exports.sovereign_banking:PlaceLien(debtorCharid, accountId, 10000, { billId = billId })
+exports.sovereign_banking:StartEscort(collectorCharid, debtorCharid, billId)
 
 -- GOVERNMENT DEBT ONLY — returns ERR_CIVIL_DEBT for a private invoice, always.
-exports.sov_bank:EscalateToLawman(billId, { collectorCharid = collector })
+exports.sovereign_banking:EscalateToLawman(billId, { collectorCharid = collector })
 
 -- The restraint resource calls this BEFORE allowing rope/hogtie, so force is
 -- gated on a server-verified debt rather than a player's claim:
-if exports.sov_bank:IsSeizureAuthorized(collectorCharid, debtorCharid) then
+if exports.sovereign_banking:IsSeizureAuthorized(collectorCharid, debtorCharid) then
   -- ...allow the restraint...
 end
 
-exports.sov_bank:ValuateItems({ { name = 'gold_nugget', count = 2 } })
-exports.sov_bank:SeizeAssets(collectorCharid, debtorCharid, billId, {
+exports.sovereign_banking:ValuateItems({ { name = 'gold_nugget', count = 2 } })
+exports.sovereign_banking:SeizeAssets(collectorCharid, debtorCharid, billId, {
   { name = 'gold_nugget', count = 2 },
 })
 -- Verifies the open tier-2 debt, caps to what is owed, skips exempt items,
@@ -224,11 +226,11 @@ exports.sov_bank:SeizeAssets(collectorCharid, debtorCharid, billId, {
 ### Loans & gold
 
 ```lua
-exports.sov_bank:CreateLoan(charid, 50000, nil, { accountId = acctId })
-exports.sov_bank:ApproveLoan(loanId, 'sheriff_desk')
-exports.sov_bank:DenyLoan(loanId, 'sheriff_desk')
-exports.sov_bank:GetLoans(charid)
-exports.sov_bank:GetGoldQuote()   -- { buy = 2100, sell = 1900 } per 1.00 gold
+exports.sovereign_banking:CreateLoan(charid, 50000, nil, { accountId = acctId })
+exports.sovereign_banking:ApproveLoan(loanId, 'sheriff_desk')
+exports.sovereign_banking:DenyLoan(loanId, 'sheriff_desk')
+exports.sovereign_banking:GetLoans(charid)
+exports.sovereign_banking:GetGoldQuote()   -- { buy = 2100, sell = 1900 } per 1.00 gold
 ```
 
 ### Migration shim (optional)
@@ -238,14 +240,14 @@ scripts route through the ledger unmodified. These take a **player source** and
 **display units** (dollars), unlike the native exports above:
 
 ```lua
-exports.sov_bank:addMoney(source, 0, 12.50)
-exports.sov_bank:removeMoney(source, 0, 12.50)
-exports.sov_bank:getMoney(source, 0)
+exports.sovereign_banking:addMoney(source, 0, 12.50)
+exports.sovereign_banking:removeMoney(source, 0, 12.50)
+exports.sovereign_banking:getMoney(source, 0)
 ```
 
 ## Admin & operations
 
-`/bankadmin` opens the ledger office to anyone with the `sovbank.admin` ACE:
+`/bankadmin` opens the ledger office to anyone with the `banking.admin` ACE:
 money-supply telemetry (banked totals, public funds, faucet/sink flows by
 category), account search with freeze/thaw and force adjustment, pending loan
 approvals, branch till levels, and one-click reconciliation. Force adjustments
@@ -254,13 +256,13 @@ are ledgered as `admin_adjust` naming the actor — never silent writes.
 Server console equivalents:
 
 ```
-sovbank account <charid> | reconcile <accountId> | tx <accountId> [limit]
-sovbank loans [approve|deny <loanId>]
-sovbankadmin supply [days] | reconcile [limit] | search <term>
-sovbankadmin freeze|unfreeze <accountId>
-sovbankadmin adjust <accountId> <deltaMinor> [currency] [reason]
-sovbankadmin reserves
-sovbanktest [serverId]     -- correctness suite (dev servers only)
+banking account <charid> | reconcile <accountId> | tx <accountId> [limit]
+banking loans [approve|deny <loanId>]
+banking_admin supply [days] | reconcile [limit] | search <term>
+banking_admin freeze|unfreeze <accountId>
+banking_admin adjust <accountId> <deltaMinor> [currency] [reason]
+banking_admin reserves
+banking_test [serverId]     -- correctness suite (dev servers only)
 ```
 
 Discord audit mirroring is off by default; set `Config.Discord.enabled` and the
@@ -284,5 +286,5 @@ per-category webhooks to mirror large movements, loans, admin actions, and heist
   advances by compare-and-set, so the lazy (teller) and sweep (scheduler) paths
   can never double-post the same period.
 - Client↔server calls use a self-contained request/response channel
-  (`sov_bank:rpc:*`) instead of VORP's callback API, sidestepping version-to-
+  (`sovereign_banking:rpc:*`) instead of VORP's callback API, sidestepping version-to-
   version callback naming differences (tech spec §16.5).

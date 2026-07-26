@@ -17,19 +17,19 @@ local ensuring = {}
 function Accounts.getById(id)
   id = tonumber(id)
   if not id then return nil end
-  return Db.single('SELECT * FROM sov_bank_accounts WHERE id = ?', { id })
+  return Db.single('SELECT * FROM sovereign_banking_accounts WHERE id = ?', { id })
 end
 
 function Accounts.getByNumber(accountNumber)
   if type(accountNumber) ~= 'string' then return nil end
-  return Db.single('SELECT * FROM sov_bank_accounts WHERE account_number = ?', { accountNumber })
+  return Db.single('SELECT * FROM sovereign_banking_accounts WHERE account_number = ?', { accountNumber })
 end
 
 --- A character's primary checking account (auto-created on first load).
 function Accounts.getPrimary(charid)
   charid = tostring(charid)
   return Db.single([[
-    SELECT * FROM sov_bank_accounts
+    SELECT * FROM sovereign_banking_accounts
     WHERE owner_type = 'character' AND owner_id = ? AND kind = 'checking'
       AND status <> 'closed'
     ORDER BY id ASC LIMIT 1
@@ -41,13 +41,13 @@ end
 function Accounts.create(ownerType, ownerId, name, kind)
   local placeholder = 'TMP-' .. Util.uuid():sub(1, 18)
   local id = Db.insert([[
-    INSERT INTO sov_bank_accounts (account_number, owner_type, owner_id, name, kind)
+    INSERT INTO sovereign_banking_accounts (account_number, owner_type, owner_id, name, kind)
     VALUES (?, ?, ?, ?, ?)
   ]], { placeholder, ownerType, tostring(ownerId), name, kind })
   if not id then return nil end
 
   local number = ('%s%07d'):format(Config.AccountPrefix or 'SVB-', id)
-  Db.execute('UPDATE sov_bank_accounts SET account_number = ? WHERE id = ?', { number, id })
+  Db.execute('UPDATE sovereign_banking_accounts SET account_number = ? WHERE id = ?', { number, id })
 
   if ownerType == Constants.OwnerType.CHARACTER then
     -- The access row is what makes the account visible to its owner:
@@ -55,7 +55,7 @@ function Accounts.create(ownerType, ownerId, name, kind)
     -- nobody can reach through the teller. Failure is logged, and
     -- repairOwnerAccess() backfills it on the next boot.
     if Db.insert([[
-      INSERT IGNORE INTO sov_bank_access (account_id, charidentifier, access_level, granted_by)
+      INSERT IGNORE INTO sovereign_banking_access (account_id, charidentifier, access_level, granted_by)
       VALUES (?, ?, 'owner', ?)
     ]], { id, tostring(ownerId), tostring(ownerId) }) == nil then
       Log.error('account %s created but its owner access row did not write — it will be invisible until repaired',
@@ -96,7 +96,7 @@ function Accounts.getSystem(key)
   local id = systemIds[key]
   if id then return Accounts.getById(id) end
   local row = Db.single([[
-    SELECT * FROM sov_bank_accounts
+    SELECT * FROM sovereign_banking_accounts
     WHERE owner_type = 'system' AND owner_id = ? LIMIT 1
   ]], { key })
   if row then systemIds[key] = row.id end
@@ -121,7 +121,7 @@ function Accounts.getAccessLevel(account, charid)
     return 'owner'
   end
   local row = Db.single(
-    'SELECT access_level FROM sov_bank_access WHERE account_id = ? AND charidentifier = ?',
+    'SELECT access_level FROM sovereign_banking_access WHERE account_id = ? AND charidentifier = ?',
     { acct.id, charid })
   return row and row.access_level or nil
 end
@@ -138,8 +138,8 @@ function Accounts.listForChar(charid)
   charid = tostring(charid)
   return Db.query([[
     SELECT a.*, x.access_level
-    FROM sov_bank_accounts a
-    JOIN sov_bank_access x ON x.account_id = a.id
+    FROM sovereign_banking_accounts a
+    JOIN sovereign_banking_access x ON x.account_id = a.id
     WHERE x.charidentifier = ? AND a.status <> 'closed'
     ORDER BY a.id ASC
   ]], { charid }) or {}
@@ -150,7 +150,7 @@ function Accounts.listAccess(accountId)
   return Db.query([[
     SELECT charidentifier, access_level, granted_by,
            UNIX_TIMESTAMP(created_at) AS created_at
-    FROM sov_bank_access WHERE account_id = ?
+    FROM sovereign_banking_access WHERE account_id = ?
     ORDER BY id ASC
   ]], { tonumber(accountId) }) or {}
 end
@@ -189,7 +189,7 @@ function Accounts.grantAccess(accountId, granterCharid, targetCharid, level)
   end
 
   Db.execute([[
-    INSERT INTO sov_bank_access (account_id, charidentifier, access_level, granted_by)
+    INSERT INTO sovereign_banking_access (account_id, charidentifier, access_level, granted_by)
     VALUES (?, ?, ?, ?)
     ON DUPLICATE KEY UPDATE access_level = VALUES(access_level), granted_by = VALUES(granted_by)
   ]], { acct.id, targetCharid, level, granterCharid })
@@ -222,7 +222,7 @@ function Accounts.revokeAccess(accountId, granterCharid, targetCharid)
     end
   end
 
-  Db.execute('DELETE FROM sov_bank_access WHERE account_id = ? AND charidentifier = ?',
+  Db.execute('DELETE FROM sovereign_banking_access WHERE account_id = ? AND charidentifier = ?',
     { acct.id, targetCharid })
   Log.info('access: %s revoked account %s access for %s',
     granterCharid, acct.account_number, targetCharid)
@@ -245,7 +245,7 @@ function Accounts.createNamed(charid, name, kind)
 
   local ok, result = Money.withLocks({ 'newacct:' .. charid }, function()
     local count = Db.scalar([[
-      SELECT COUNT(*) FROM sov_bank_accounts
+      SELECT COUNT(*) FROM sovereign_banking_accounts
       WHERE owner_type = 'character' AND owner_id = ? AND status <> 'closed'
     ]], { charid })
     -- A failed count must not read as "no accounts" and wave the cap through.
@@ -288,7 +288,7 @@ function Accounts.close(accountId, charid)
         return false, Constants.Err.NOT_EMPTY
       end
     end
-    Db.execute("UPDATE sov_bank_accounts SET status = 'closed' WHERE id = ?", { acct.id })
+    Db.execute("UPDATE sovereign_banking_accounts SET status = 'closed' WHERE id = ?", { acct.id })
     Log.info('account %s closed by %s', acct.account_number, charid)
     return true, { closed = acct.id }
   end)
@@ -303,10 +303,10 @@ end
 --- Idempotent and cheap: it only touches rows that are actually missing.
 function Accounts.repairOwnerAccess()
   local repaired = Db.execute([[
-    INSERT IGNORE INTO sov_bank_access (account_id, charidentifier, access_level, granted_by)
+    INSERT IGNORE INTO sovereign_banking_access (account_id, charidentifier, access_level, granted_by)
     SELECT a.id, a.owner_id, 'owner', 'boot-repair'
-    FROM sov_bank_accounts a
-    LEFT JOIN sov_bank_access x
+    FROM sovereign_banking_accounts a
+    LEFT JOIN sovereign_banking_access x
       ON x.account_id = a.id AND x.charidentifier = a.owner_id
     WHERE a.owner_type = 'character' AND a.status <> 'closed' AND x.id IS NULL
   ]])
@@ -335,7 +335,7 @@ function Accounts.ensureSystemAccounts()
       -- Fresh install: pin id AND number to the reserved slot.
       local number = ('%s%07d'):format(prefix, num)
       Db.execute([[
-        INSERT IGNORE INTO sov_bank_accounts (id, account_number, owner_type, owner_id, name, kind)
+        INSERT IGNORE INTO sovereign_banking_accounts (id, account_number, owner_type, owner_id, name, kind)
         VALUES (?, ?, 'system', ?, ?, 'checking')
       ]], { num, number, seed.key, seed.name })
       acct = Accounts.getSystem(seed.key)
@@ -354,7 +354,7 @@ function Accounts.ensureSystemAccounts()
           Log.error('cannot brand %s as %s: number already held by account id %s',
             seed.key, wanted, tostring(clash.id))
         else
-          Db.execute('UPDATE sov_bank_accounts SET account_number = ? WHERE id = ?',
+          Db.execute('UPDATE sovereign_banking_accounts SET account_number = ? WHERE id = ?',
             { wanted, acct.id })
           Log.info('rebranded system account %s as %s', seed.key, wanted)
         end

@@ -38,7 +38,7 @@ local function spawnTellerPed(branch)
   local model = branch.pedModel or 'u_m_m_valbanker_01'
   local hash = GetHashKey(model)
   if not loadModel(hash) then
-    print(('[sov_bank] teller ped model %s failed to load for %s'):format(model, branch.id))
+    print(('[sovereign_banking] teller ped model %s failed to load for %s'):format(model, branch.id))
     return nil
   end
   local t = branch.teller

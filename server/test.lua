@@ -3,8 +3,8 @@
 
   Run from the SERVER console on a dev box:
 
-    sovbanktest            -- bank-side invariants (no player needed)
-    sovbanktest <serverId> -- also runs the wallet round-trip using that
+    banking_test            -- bank-side invariants (no player needed)
+    banking_test <serverId> -- also runs the wallet round-trip using that
                               player's wallet (small amounts, restored after)
 
   Drives the real engine against the live database with throwaway accounts
@@ -16,7 +16,7 @@
   compensation branch. That path is exercised manually by killing VORP mid-op.
 ]]
 
-local TAG = 'sov_bank_test'
+local TAG = 'sovereign_banking_test'
 local running = false
 
 local function color(ok) return ok and '^2' or '^1' end
@@ -56,7 +56,7 @@ end
 
 local function runSuite(playerSrc)
   local t = newSuite()
-  print('^5[sov_bank] correctness suite — tech spec §14^7')
+  print('^5[sovereign_banking] correctness suite — tech spec §14^7')
 
   -- ---------------------------------------------------------------- setup
   local A = Accounts.create(Constants.OwnerType.CHARACTER, 'SOVTEST-A', 'Test A',
@@ -151,7 +151,7 @@ local function runSuite(playerSrc)
     -- SECURITY: collections must refuse a payment drawn from an account the
     -- DEBTOR does not control, or a collector could name any account id in
     -- the bank and drain it under color of a real debt.
-    Db.execute("UPDATE sov_bank_bills SET status = 'in_collections' WHERE id = ?",
+    Db.execute("UPDATE sovereign_banking_bills SET status = 'in_collections' WHERE id = ?",
       { billRes.billId })
     local aBefore2 = balMoney(A.id)
     local sOk, sErr = Collections.record(billRes.billId, 'SOVTEST-COLLECTOR', 100,
@@ -159,7 +159,7 @@ local function runSuite(playerSrc)
     check(t, 'collections refuses an account the debtor does not control',
       sOk == false and sErr == Constants.Err.ACCESS and balMoney(A.id) == aBefore2,
       ('ok=%s err=%s'):format(tostring(sOk), tostring(sErr)))
-    Db.execute('DELETE FROM sov_bank_bills WHERE id = ?', { billRes.billId })
+    Db.execute('DELETE FROM sovereign_banking_bills WHERE id = ?', { billRes.billId })
   else
     skip(t, 'collections refuses a foreign source account', 'bill could not be issued')
   end
@@ -198,11 +198,11 @@ local function runSuite(playerSrc)
   ok, res = Money.transfer(A.id, A.id, 0, 100, { source = TAG })
   check(t, 'self-transfer refused', not ok and res == Constants.Err.SAME_ACCOUNT, tostring(res))
 
-  Db.execute("UPDATE sov_bank_accounts SET status = 'frozen' WHERE id = ?", { B.id })
+  Db.execute("UPDATE sovereign_banking_accounts SET status = 'frozen' WHERE id = ?", { B.id })
   ok, res = Money.transfer(A.id, B.id, 0, 100, { source = TAG })
   check(t, 'transfer into a frozen account refused',
     not ok and res == Constants.Err.FROZEN, tostring(res))
-  Db.execute("UPDATE sov_bank_accounts SET status = 'active' WHERE id = ?", { B.id })
+  Db.execute("UPDATE sovereign_banking_accounts SET status = 'active' WHERE id = ?", { B.id })
 
   -- ---------------------------------------------------------- concurrency
   -- Top A up to exactly 5000, then race 10 transfers of 1000. With the
@@ -266,33 +266,33 @@ local function runSuite(playerSrc)
         rep and json.encode(rep.drift) or 'nil')
     end
   else
-    skip(t, 'wallet round-trip', 'no player id given — run: sovbanktest <serverId>')
+    skip(t, 'wallet round-trip', 'no player id given — run: banking_test <serverId>')
   end
 
   -- --------------------------------------------------------------- cleanup
   if ins and feeIncome > 0 then
     Money.accountDebit(ins.id, 0, feeIncome,
       { category = Constants.Category.ADMIN_ADJUST or 'admin_adjust',
-        memo = 'sov_bank_test cleanup: reverse test fee income', source = TAG })
+        memo = 'sovereign_banking_test cleanup: reverse test fee income', source = TAG })
   end
-  Db.execute('DELETE FROM sov_bank_transactions WHERE account_id IN (?, ?)', { A.id, B.id })
-  Db.execute('DELETE FROM sov_bank_transactions WHERE account_id IS NULL AND source_resource = ?', { TAG })
-  Db.execute('DELETE FROM sov_bank_accounts WHERE id IN (?, ?)', { A.id, B.id }) -- access cascades
+  Db.execute('DELETE FROM sovereign_banking_transactions WHERE account_id IN (?, ?)', { A.id, B.id })
+  Db.execute('DELETE FROM sovereign_banking_transactions WHERE account_id IS NULL AND source_resource = ?', { TAG })
+  Db.execute('DELETE FROM sovereign_banking_accounts WHERE id IN (?, ?)', { A.id, B.id }) -- access cascades
 
-  print(('%s[sov_bank] suite done: %d passed, %d failed, %d skipped^7')
+  print(('%s[sovereign_banking] suite done: %d passed, %d failed, %d skipped^7')
     :format(color(t.fail == 0), t.pass, t.fail, t.skipped))
 end
 
-RegisterCommand('sovbanktest', function(source, args)
+RegisterCommand('banking_test', function(source, args)
   if source ~= 0 then return end -- server console only
   if running then
-    print('^3[sov_bank] suite already running^7')
+    print('^3[sovereign_banking] suite already running^7')
     return
   end
   running = true
   CreateThread(function()
     local ok, err = pcall(runSuite, tonumber(args[1]))
-    if not ok then print(('^1[sov_bank] suite crashed: %s^7'):format(tostring(err))) end
+    if not ok then print(('^1[sovereign_banking] suite crashed: %s^7'):format(tostring(err))) end
     running = false
   end)
 end, true)
