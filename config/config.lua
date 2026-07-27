@@ -86,6 +86,14 @@ Config.Teller = {
   -- ped (logged once).
   pedModel         = 's_m_m_bankclerk_01',
   pedSpawnDistance = 60.0,        -- spawn/despawn distance for teller peds
+  -- OFF, and it should stay off: teller coords are surveyed at foot level on
+  -- an interior floor, while ground-snapping traces to world terrain — under
+  -- a raised building (Valentine's bank) that is metres below, dropping the
+  -- clerk through the floor. sovereign_medical reached the same setting for
+  -- its indoor doctors. Per-branch override: groundSnap = true.
+  groundSnap       = false,
+  -- Standing idle so the clerk isn't a T-pose. Fitting for a bank.
+  pedScenario      = 'WORLD_HUMAN_CLIPBOARD',
 }
 
 -- ============================================================================

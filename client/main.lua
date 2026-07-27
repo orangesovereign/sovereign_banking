@@ -43,8 +43,18 @@ local function loadModel(name)
   return nil
 end
 
+--- Dress a ped: set the outfit variation, THEN push the update.
+--- Applying a variation is a TWO-native operation. Without the second call the
+--- ped exists, collides and can be interacted with, but renders as nothing at
+--- all — an invisible clerk at a working counter. sovereign_medical hit this
+--- with its Valentine doctor; same fix, same reason.
+local function dressPed(ped)
+  pcall(function() Citizen.InvokeNative(0x283978A15512B2FE, ped, true) end)   -- _SET_RANDOM_OUTFIT_VARIATION
+  pcall(function() Citizen.InvokeNative(0xCC8CA3E88256E58F, ped, false, true, true, true, false) end) -- _UPDATE_PED_VARIATION
+end
+
 local function spawnTellerPed(branch)
-  local name = branch.pedModel or Config.Teller.pedModel or 'U_M_M_NbxGeneralStoreOwner_01'
+  local name = branch.pedModel or Config.Teller.pedModel or 's_m_m_bankclerk_01'
   local model = loadModel(name)
   if not model then
     -- Logged ONCE per branch: the distance loop revisits every couple of
@@ -55,25 +65,44 @@ local function spawnTellerPed(branch)
     return nil
   end
 
-  -- Ground-snap before freezing, so a teller whose configured Z sits slightly
-  -- above the floor doesn't hover. Falls back to the configured Z when
-  -- collision hasn't streamed in yet.
   local t = branch.teller
-  local z = t.z
-  for _ = 1, 5 do
-    local found, groundZ = GetGroundZAndNormalFor_3dCoord(t.x, t.y, t.z + 2.0)
-    if found and groundZ then z = groundZ break end
-    Wait(100)
+  local heading = branch.tellerHeading or 0.0
+  local ped = CreatePed(model, t.x, t.y, t.z, heading, false, true, true, true)
+
+  -- CreatePed can return before the entity is real; everything below would
+  -- silently no-op on a handle that does not exist yet.
+  local tries = 0
+  while not DoesEntityExist(ped) and tries < 40 do Wait(50) tries = tries + 1 end
+  if not DoesEntityExist(ped) then
+    print(('[sovereign_banking] teller ped never existed at %s'):format(branch.id))
+    return nil
   end
 
-  local ped = CreatePed(model, t.x, t.y, z, branch.tellerHeading or 0.0, false, false, false, false)
-  -- SetRandomOutfitVariation — RDR2 peds spawn invisible without it.
-  Citizen.InvokeNative(0x283978A15512B2FE, ped, true)
+  -- Teller coords are surveyed at foot level on an INTERIOR floor. Ground
+  -- snapping traces to world terrain, which under a raised building is metres
+  -- below — so it is off by default, and the coords are reasserted either way.
+  local snap = branch.groundSnap
+  if snap == nil then snap = Config.Teller.groundSnap end
+  if snap == true then PlaceEntityOnGroundProperly(ped, true) end
+  SetEntityCoordsNoOffset(ped, t.x, t.y, t.z, false, false, false)
+  SetEntityHeading(ped, heading)
+
+  dressPed(ped)
+  SetEntityVisible(ped, true, false) -- three-arg form, as the post office clerk uses
   SetEntityCanBeDamaged(ped, false)
   SetEntityInvincible(ped, true)
-  FreezeEntityPosition(ped, true)
   SetBlockingOfNonTemporaryEvents(ped, true)
+  FreezeEntityPosition(ped, true)
   SetPedCanBeTargetted(ped, false)
+
+  -- A standing scenario settles the clerk into an idle instead of a T-pose.
+  local scenario = branch.pedScenario or Config.Teller.pedScenario
+  if scenario then
+    pcall(function()
+      TaskStartScenarioInPlace(ped, GetHashKey(scenario), -1, true, false, false, false)
+    end)
+  end
+
   SetModelAsNoLongerNeeded(model)
   return ped
 end
@@ -112,6 +141,26 @@ CreateThread(function()
     Wait(2000)
   end
 end)
+
+-- Diagnostic (F8): where each branch is, whether its clerk exists, and how far
+-- the spawned ped ended up from the configured spot. A large Z delta means the
+-- ground snap grabbed terrain instead of the floor.
+RegisterCommand('banking_peds', function()
+  local me = GetEntityCoords(PlayerPedId())
+  print('[sovereign_banking] teller peds:')
+  for _, branch in ipairs(Config.Locations.banks or {}) do
+    local t = branch.teller
+    local ped = peds[branch.id]
+    local line = ('  %-12s dist %6.1fm  ped=%s'):format(
+      branch.id, #(me - t), ped and 'yes' or (pedFailed[branch.id] and 'MODEL FAILED' or 'no'))
+    if ped and DoesEntityExist(ped) then
+      local p = GetEntityCoords(ped)
+      line = line .. ('  at %.2f,%.2f,%.2f  (config z %.2f, dz %+.2f)')
+        :format(p.x, p.y, p.z, t.z, p.z - t.z)
+    end
+    print(line)
+  end
+end, false)
 
 AddEventHandler('onResourceStop', function(res)
   if res ~= GetCurrentResourceName() then return end
