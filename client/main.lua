@@ -53,6 +53,19 @@ local function dressPed(ped)
   pcall(function() Citizen.InvokeNative(0xCC8CA3E88256E58F, ped, false, true, true, true, false) end) -- _UPDATE_PED_VARIATION
 end
 
+--- Where the CLERK stands, which is not where the CUSTOMER stands.
+--- `branch.teller` is the customer side of the counter — the prompt fires from
+--- it and the server measures proximity against it, so it must not move to suit
+--- a ped. `branch.ped` is an optional surveyed vector4 (x, y, z, heading) for
+--- the clerk's own mark behind the counter.
+local function pedSpot(branch)
+  local p = branch.ped
+  if p then
+    return vector3(p.x, p.y, p.z), p.w + 0.0
+  end
+  return branch.teller, branch.tellerHeading or 0.0
+end
+
 local function spawnTellerPed(branch)
   local name = branch.pedModel or Config.Teller.pedModel or 's_m_m_bankclerk_01'
   local model = loadModel(name)
@@ -65,8 +78,7 @@ local function spawnTellerPed(branch)
     return nil
   end
 
-  local t = branch.teller
-  local heading = branch.tellerHeading or 0.0
+  local t, heading = pedSpot(branch)
   local ped = CreatePed(model, t.x, t.y, t.z, heading, false, true, true, true)
 
   -- CreatePed can return before the entity is real; everything below would
@@ -149,16 +161,18 @@ RegisterCommand('banking_peds', function()
   local me = GetEntityCoords(PlayerPedId())
   print('[sovereign_banking] teller peds:')
   for _, branch in ipairs(Config.Locations.banks or {}) do
-    local t = branch.teller
+    local mark, heading = pedSpot(branch)
     local ped = peds[branch.id]
-    local line = ('  %-12s dist %6.1fm  ped=%s'):format(
-      branch.id, #(me - t), ped and 'yes' or (pedFailed[branch.id] and 'MODEL FAILED' or 'no'))
+    local line = ('  %-12s counter %5.1fm  mark %5.1fm  ped=%s'):format(
+      branch.id, #(me - branch.teller), #(me - mark),
+      ped and 'yes' or (pedFailed[branch.id] and 'MODEL FAILED' or 'no'))
     if ped and DoesEntityExist(ped) then
       local p = GetEntityCoords(ped)
-      line = line .. ('  at %.2f,%.2f,%.2f  (config z %.2f, dz %+.2f)')
-        :format(p.x, p.y, p.z, t.z, p.z - t.z)
+      line = line .. ('  at %.2f,%.2f,%.2f h%.1f  (off mark %.2fm, dz %+.2f)')
+        :format(p.x, p.y, p.z, GetEntityHeading(ped), #(p - mark), p.z - mark.z)
     end
     print(line)
+    print(('    configured mark %.2f,%.2f,%.2f h%.2f'):format(mark.x, mark.y, mark.z, heading))
   end
 end, false)
 
