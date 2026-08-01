@@ -119,11 +119,11 @@ Config.Locations = {
       name   = 'Bank of Annesburg',
       subtitle = 'Colliery Branch',
       hours  = { 'Monday - Saturday', '8:00 am - 5:00 pm', 'Sunday', 'Closed' },
-      blip   = vector3(2939.63, 1288.25, 44.6),
-      teller = vector3(2939.63, 1288.25, 44.6), -- derived, see Tumbleweed
-      tellerHeading = 159.73,
+      blip   = vector3(2931.99, 1283.44, 44.6),
+      teller = vector3(2931.99, 1283.44, 44.6), -- derived, see Tumbleweed
+      tellerHeading = 259.84,
       tellerRange   = 2.5,
-      ped      = vector4(2939.14, 1286.94, 44.6, 339.73), -- surveyed in game
+      ped      = vector4(2933.37, 1283.19, 44.6, 79.84), -- surveyed in game
       pedModel = 's_m_m_bankclerk_01',
       features = { transfers = true, sdb = true, gold = true, loans = true },
       -- A mining town's bank carries the colliery payroll, so it sits between
