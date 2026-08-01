@@ -13,11 +13,10 @@
               tellerHeading. Survey it in game with a coord tool while standing
               on the clerk's mark, facing the customer.
 
-  Surveyed in game: Valentine, Tumbleweed, Armadillo, Blackwater. Rhodes and
-  Saint Denis are still approximations — walk them and replace the vector4s the
-  same way. Blackwater's shipped guess proved to be 53m out, far enough that no
-  prompt would ever have fired, so treat the remaining two as unproven rather
-  than merely imprecise.
+  Surveyed in game: everywhere but Saint Denis, which is still the shipped
+  guess — walk it and replace the vector4 the same way. Treat it as unproven
+  rather than imprecise: of the guesses that have been checked, Blackwater's
+  was 53m out and Rhodes' 7m, both far enough that no prompt could ever fire.
 ]]
 
 Config = Config or {}
@@ -44,10 +43,11 @@ Config.Locations = {
       name   = 'Bank of Rhodes',
       subtitle = 'County Branch',
       hours  = { 'Monday - Saturday', '8:00 am - 5:00 pm', 'Sunday', 'Closed' },
-      blip   = vector3(1291.3, -1300.2, 76.9),
-      teller = vector3(1288.9, -1296.5, 77.04),
-      tellerHeading = 315.0,
+      blip   = vector3(1292.11, -1302.12, 76.99),
+      teller = vector3(1292.11, -1302.12, 76.99), -- derived, see Tumbleweed
+      tellerHeading = 140.04,
       tellerRange   = 2.5,
+      ped      = vector4(1291.21, -1303.19, 76.99, 320.04), -- surveyed in game
       pedModel = 's_m_m_bankclerk_01',
       features = { transfers = true, sdb = true, gold = true, loans = true },
       reserve = { cap = 250000 },
