@@ -13,9 +13,9 @@
               tellerHeading. Survey it in game with a coord tool while standing
               on the clerk's mark, facing the customer.
 
-  Surveyed in game: Valentine, Tumbleweed. Rhodes, Saint Denis and Blackwater
-  are still close approximations — walk them and replace the vector4s the same
-  way.
+  Surveyed in game: Valentine, Tumbleweed, Armadillo. Rhodes, Saint Denis and
+  Blackwater are still close approximations — walk them and replace the
+  vector4s the same way.
 ]]
 
 Config = Config or {}
@@ -93,6 +93,20 @@ Config.Locations = {
       pedModel = 's_m_m_bankclerk_01',
       features = { transfers = true, sdb = true, gold = true, loans = true },
       -- A frontier branch keeps less cash on hand than the towns back east.
+      reserve = { cap = 200000 },
+    },
+    {
+      id     = 'armadillo',
+      name   = 'Bank of Armadillo',
+      subtitle = 'New Austin Branch',
+      hours  = { 'Monday - Saturday', '8:00 am - 5:00 pm', 'Sunday', 'Closed' },
+      blip   = vector3(-3665.95, -2627.28, -13.64),
+      teller = vector3(-3665.95, -2627.28, -13.64), -- derived, see Tumbleweed
+      tellerHeading = 173.57,
+      tellerRange   = 2.5,
+      ped      = vector4(-3666.11, -2628.67, -13.64, 353.57), -- surveyed in game
+      pedModel = 's_m_m_bankclerk_01',
+      features = { transfers = true, sdb = true, gold = true, loans = true },
       reserve = { cap = 200000 },
     },
   },

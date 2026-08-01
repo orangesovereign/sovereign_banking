@@ -323,7 +323,7 @@
                 "id": "T1",
                 "who": "a",
                 "t": "Open the map.",
-                "x": "<b>Expect:</b> a bank blip at Valentine, Rhodes, Saint Denis, Blackwater and Tumbleweed."
+                "x": "<b>Expect:</b> six bank blips &mdash; Valentine, Rhodes, Saint Denis, Blackwater, Tumbleweed and Armadillo."
             },
             {
                 "id": "T2",
@@ -335,14 +335,14 @@
                 "id": "T2b",
                 "who": "a",
                 "t": "Run <code>banking_peds</code> in F8 while standing at the counter.",
-                "x": "<b>Expect:</b> the branch reports <code>ped=yes</code> and <b>off mark under 0.5m</b>. Valentine and Tumbleweed are surveyed and should be near zero; the other three still carry approximations."
+                "x": "<b>Expect:</b> the branch reports <code>ped=yes</code> and <b>off mark under 0.5m</b>. Valentine, Tumbleweed and Armadillo are surveyed and should be near zero; the other three still carry approximations."
             },
             {
                 "id": "T3",
                 "who": "a",
                 "gate": true,
                 "t": "Stand at the counter and hold <b>[G]</b>.",
-                "x": "<b>Expect:</b> the prompt appears, and holding it opens the bank. <b>If no prompt appears</b>, compare your coords to <code>teller</code> in <code>config/locations.lua</code> &mdash; only Valentine's is surveyed; Tumbleweed's is derived and the rest are approximate."
+                "x": "<b>Expect:</b> the prompt appears, and holding it opens the bank. <b>If no prompt appears</b>, compare your coords to <code>teller</code> in <code>config/locations.lua</code> &mdash; only Valentine's is surveyed; Tumbleweed's and Armadillo's are derived from their clerk marks, and the rest are approximate."
             },
             {
                 "id": "T4",

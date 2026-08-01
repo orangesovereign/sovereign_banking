@@ -49,10 +49,10 @@ Three known soft spots, called out where they matter:
   escrow-encrypted, modified build that declares stashes in config, while this
   module registers them at runtime. Its export names could not be verified from
   source. Nothing else depends on the inventory, so a failure there is contained.
-- **Teller coordinates** — of the five branches in `config/locations.lua`, only
-  Valentine's counter is surveyed; Tumbleweed's is derived from its clerk mark
-  and the other three are approximations. If no prompt appears at a counter,
-  run `banking_peds` in F8 and compare your position.
+- **Teller coordinates** — of the six branches in `config/locations.lua`, only
+  Valentine's counter is surveyed; Tumbleweed's and Armadillo's are derived from
+  their clerk marks and the other three are approximations. If no prompt appears
+  at a counter, run `banking_peds` in F8 and compare your position.
 - **Job names** — only `medical` is live today. `lawman` and `tax_office` are
   placeholders, so the articles depending on them are skippable for now.
 
