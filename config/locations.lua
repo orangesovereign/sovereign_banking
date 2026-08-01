@@ -13,8 +13,9 @@
               tellerHeading. Survey it in game with a coord tool while standing
               on the clerk's mark, facing the customer.
 
-  Only Valentine has been surveyed in game. The other three are close
-  approximations — walk them and replace the vector4s the same way.
+  Surveyed in game: Valentine, Tumbleweed. Rhodes, Saint Denis and Blackwater
+  are still close approximations — walk them and replace the vector4s the same
+  way.
 ]]
 
 Config = Config or {}
@@ -74,6 +75,25 @@ Config.Locations = {
       pedModel = 's_m_m_bankclerk_01',
       features = { transfers = true, sdb = true, gold = true, loans = true },
       reserve = { cap = 300000 },
+    },
+    {
+      id     = 'tumbleweed',
+      name   = 'Bank of Tumbleweed',
+      subtitle = 'New Austin Branch',
+      hours  = { 'Monday - Saturday', '8:00 am - 5:00 pm', 'Sunday', 'Closed' },
+      blip   = vector3(-5533.06, -2950.96, -0.74),
+      -- DERIVED, not surveyed: projected 1.4m out from the clerk's mark along
+      -- his heading, the same geometry Valentine has. The same projection
+      -- reproduces Valentine's surveyed counter to within 0.24m, so it is
+      -- sound, but walk it and replace this with a real reading when you can.
+      teller = vector3(-5533.06, -2950.96, -0.74),
+      tellerHeading = 22.17,
+      tellerRange   = 2.5,
+      ped      = vector4(-5533.59, -2949.66, -0.74, 202.17), -- surveyed in game
+      pedModel = 's_m_m_bankclerk_01',
+      features = { transfers = true, sdb = true, gold = true, loans = true },
+      -- A frontier branch keeps less cash on hand than the towns back east.
+      reserve = { cap = 200000 },
     },
   },
 }

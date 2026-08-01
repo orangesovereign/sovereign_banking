@@ -41,8 +41,12 @@ function Heist.getRow(branchId, currency)
   local branch = Branches.getById(branchId)
   if not branch then return nil end
 
+  -- Both epochs, on BOTH paths. This query used to omit claimed_epoch, which is
+  -- the path taken every time after the first: cooldownRemaining then read a nil
+  -- last-claimed and returned 0, so the cooldown silently never applied.
   local row = Db.single([[
-    SELECT *, UNIX_TIMESTAMP(last_refilled_at) AS refilled_epoch
+    SELECT *, UNIX_TIMESTAMP(last_refilled_at) AS refilled_epoch,
+           UNIX_TIMESTAMP(last_claimed_at) AS claimed_epoch
     FROM sovereign_banking_reserves WHERE branch_id = ? AND currency = ?
   ]], { branch.id, currency })
   if row then return row end
