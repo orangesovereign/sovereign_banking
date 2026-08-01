@@ -33,7 +33,7 @@ Config.Locations = {
       teller = vector3(-308.75, 775.3, 118.66), -- customer side of the counter
       tellerHeading = 185.0,
       tellerRange   = 2.5,
-      ped      = vector4(-308.06, 774.02, 118.65, 18.99), -- surveyed in game
+      ped      = vector4(-308.04, 774.04, 118.65, 12.81), -- surveyed in game
       pedModel = 's_m_m_bankclerk_01',
       features = { transfers = true, sdb = true, gold = true, loans = true },
       -- reserve / rateOverrides used by later phases
