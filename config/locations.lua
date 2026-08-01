@@ -13,10 +13,11 @@
               tellerHeading. Survey it in game with a coord tool while standing
               on the clerk's mark, facing the customer.
 
-  Surveyed in game: everywhere but Saint Denis, which is still the shipped
-  guess — walk it and replace the vector4 the same way. Treat it as unproven
-  rather than imprecise: of the guesses that have been checked, Blackwater's
-  was 53m out and Rhodes' 7m, both far enough that no prompt could ever fire.
+  Every branch below is now placed from a clerk mark surveyed in game. Nothing
+  here is a guess any more — worth remembering, because every one of the four
+  originally-guessed counters turned out to be unusable: Blackwater was 53m
+  out, Rhodes 7m, Saint Denis 4.7m and Valentine needed correcting too. All
+  beyond the 2.5m prompt radius. Survey; do not estimate.
 ]]
 
 Config = Config or {}
@@ -57,10 +58,11 @@ Config.Locations = {
       name   = 'Bank of Saint Denis',
       subtitle = 'City Branch',
       hours  = { 'Monday - Saturday', '8:00 am - 6:00 pm', 'Sunday', 'Closed' },
-      blip   = vector3(2643.8, -1293.8, 52.3),
-      teller = vector3(2646.9, -1289.7, 52.25),
-      tellerHeading = 280.0,
+      blip   = vector3(2644.37, -1292.67, 52.2),
+      teller = vector3(2644.37, -1292.67, 52.2), -- derived, see Tumbleweed
+      tellerHeading = 202.68,
       tellerRange   = 2.5,
+      ped      = vector4(2644.91, -1293.96, 52.2, 22.68), -- surveyed in game
       pedModel = 's_m_m_bankclerk_01',
       features = { transfers = true, sdb = true, gold = true, loans = true },
       reserve = { cap = 400000 }, -- city bank holds more (design §5.11)
@@ -111,6 +113,22 @@ Config.Locations = {
       pedModel = 's_m_m_bankclerk_01',
       features = { transfers = true, sdb = true, gold = true, loans = true },
       reserve = { cap = 200000 },
+    },
+    {
+      id     = 'annesburg',
+      name   = 'Bank of Annesburg',
+      subtitle = 'Colliery Branch',
+      hours  = { 'Monday - Saturday', '8:00 am - 5:00 pm', 'Sunday', 'Closed' },
+      blip   = vector3(2939.63, 1288.25, 44.6),
+      teller = vector3(2939.63, 1288.25, 44.6), -- derived, see Tumbleweed
+      tellerHeading = 159.73,
+      tellerRange   = 2.5,
+      ped      = vector4(2939.14, 1286.94, 44.6, 339.73), -- surveyed in game
+      pedModel = 's_m_m_bankclerk_01',
+      features = { transfers = true, sdb = true, gold = true, loans = true },
+      -- A mining town's bank carries the colliery payroll, so it sits between
+      -- the frontier branches and the towns.
+      reserve = { cap = 250000 },
     },
   },
 }

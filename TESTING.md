@@ -49,12 +49,12 @@ Three known soft spots, called out where they matter:
   escrow-encrypted, modified build that declares stashes in config, while this
   module registers them at runtime. Its export names could not be verified from
   source. Nothing else depends on the inventory, so a failure there is contained.
-- **Teller coordinates** — five of the six branches in `config/locations.lua`
-  are placed from surveyed clerk marks. **Saint Denis is still an unwalked
-  guess** — the two guesses since checked in game were 53m (Blackwater) and 7m
-  (Rhodes) out, both far enough that no prompt could fire, so assume the same of
-  it until proven. If no prompt appears at a counter, run `banking_peds` in F8
-  and compare your position.
+- ~~**Teller coordinates**~~ — resolved. All seven branches in
+  `config/locations.lua` are now placed from clerk marks surveyed in game. Every
+  one of the original estimates proved unusable when walked (53m, 7m and 4.7m
+  out, against a 2.5m prompt radius), so if a prompt fails to appear now,
+  suspect the code and not the coordinates. `banking_peds` in F8 reports how far
+  each clerk landed from his mark.
 - **Job names** — only `medical` is live today. `lawman` and `tax_office` are
   placeholders, so the articles depending on them are skippable for now.
 
