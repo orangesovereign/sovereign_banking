@@ -12,7 +12,7 @@
   failing together for one cause.
 ]]
 
-local blips = {}
+local blips = {}      -- branch.id -> blip handle
 local peds = {}       -- branch.id -> ped handle
 local pedFailed = {}  -- branch.id -> true once its model is known-bad
 
@@ -20,7 +20,10 @@ local function createBlip(branch)
   local blip = BlipAddForCoords(1664425300, branch.blip.x, branch.blip.y, branch.blip.z)
   if not blip then return nil end
 
-  local sprite = Config.Teller.blipSprite or 'blip_shop_bank'
+  -- An unknown sprite name is the quietest failure here: it hashes, it is
+  -- accepted, the blip exists — and draws nothing. Config carries the verified
+  -- names; banking_blips prints what was actually used.
+  local sprite = Config.Teller.blipSprite or 'blip_proc_bank'
   SetBlipSprite(blip, joaat(sprite), false)
   if Config.Teller.blipModifier then
     BlipAddModifier(blip, joaat(Config.Teller.blipModifier))
@@ -119,19 +122,46 @@ local function spawnTellerPed(branch)
   return ped
 end
 
--- Blips: one pass at start. Guarded per branch so one bad entry cannot cost
--- the others their marker.
+-- Blips: one pass, but NOT at resource start. A blip created before the player
+-- is in the world returns a perfectly good handle that never draws, so this
+-- waits for the session first. sovereign_medical sits on a flat Wait(2000) here
+-- for the same reason; waiting on the session itself survives a slow load.
+-- Guarded per branch so one bad entry cannot cost the others their marker.
 CreateThread(function()
+  while not NetworkIsSessionStarted() do Wait(500) end
+  Wait(1000)
+
+  local placed, total = 0, 0
   for _, branch in ipairs(Config.Locations.banks or {}) do
+    total = total + 1
     local ok, blip = pcall(createBlip, branch)
     if ok and blip then
-      blips[#blips + 1] = blip
+      blips[branch.id] = blip
+      placed = placed + 1
     else
       print(('[sovereign_banking] could not create the map blip for %s: %s')
         :format(branch.id, tostring(blip)))
     end
   end
+  print(('[sovereign_banking] %d of %d map blips placed (sprite %s)'):format(
+    placed, total, tostring(Config.Teller.blipSprite)))
 end)
+
+-- Diagnostic (F8): how many blips were placed, and the sprite they were given.
+-- A full count with no markers on the map means the sprite name is wrong — the
+-- one failure mode that produces no error anywhere.
+RegisterCommand('banking_blips', function()
+  local sprite = Config.Teller.blipSprite or 'blip_proc_bank'
+  print(('[sovereign_banking] sprite "%s" (hash %d)'):format(sprite, joaat(sprite)))
+  print('  Every branch "placed" but no markers on the map means the name is not')
+  print('  a real blip texture. Verified: blip_proc_bank, blip_robbery_bank,')
+  print('  blip_bank_debt. Catalog: rdr3_discoveries .../textures/blips/README.md')
+  for _, branch in ipairs(Config.Locations.banks or {}) do
+    print(('  %-12s %-7s  %.1f, %.1f, %.1f'):format(
+      branch.id, blips[branch.id] and 'placed' or 'MISSING',
+      branch.blip.x, branch.blip.y, branch.blip.z))
+  end
+end, false)
 
 -- Teller peds: spawn and despawn by distance.
 CreateThread(function()
@@ -178,7 +208,7 @@ end, false)
 
 AddEventHandler('onResourceStop', function(res)
   if res ~= GetCurrentResourceName() then return end
-  for _, blip in ipairs(blips) do
+  for _, blip in pairs(blips) do -- keyed by branch id, so pairs not ipairs
     RemoveBlip(blip)
   end
   for _, ped in pairs(peds) do

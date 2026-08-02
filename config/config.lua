@@ -78,7 +78,14 @@ Config.Teller = {
   openRange        = 2.5,         -- metres from the teller to interact (client)
   serverSlack      = 2.5,         -- extra metres allowed by the server-side gate
   nearbyRange      = 30.0,        -- client switches to per-frame checks inside this
-  blipSprite       = 'blip_shop_bank',
+  -- MUST be a real blip texture name. An unknown name still hashes fine and
+  -- still returns a blip handle — it simply has nothing to draw, so the marker
+  -- never appears and nothing is logged. 'blip_shop_bank' was invented and cost
+  -- exactly that. Verify names against the catalog before changing this:
+  -- _reference/rdr3_discoveries/useful_info_from_rpfs/textures/blips/README.md
+  -- Bank-appropriate and verified: blip_proc_bank (-2128054417, the game's own
+  -- bank marker), blip_robbery_bank (623155783), blip_bank_debt (1869246576).
+  blipSprite       = 'blip_proc_bank',
   blipModifier     = nil,         -- e.g. 'BLIP_MODIFIER_MP_COLOR_32' to tint it
   spawnPeds        = true,        -- spawn a teller ped at each branch
   -- Fallback when a branch sets no pedModel. Must be a model that exists in
