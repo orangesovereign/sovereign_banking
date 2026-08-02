@@ -55,8 +55,11 @@ Three known soft spots, called out where they matter:
   out, against a 2.5m prompt radius), so if a prompt fails to appear now,
   suspect the code and not the coordinates. `banking_peds` in F8 reports how far
   each clerk landed from his mark.
-- **Job names** — only `medical` is live today. `lawman` and `tax_office` are
-  placeholders, so the articles depending on them are skippable for now.
+- **Job names** — `medical` is live. The law societies (`law_central` plus one
+  per station) are declared against `sovereign_lawandorder`'s config, so they
+  seed and can be paid into, but they only come alive for a character once that
+  resource is writing the `sheriff` / `marshal` VORP jobs on duty. `tax_office`
+  is still a placeholder, so articles depending on it are skippable for now.
 
 ## Rebuilding a ledger
 

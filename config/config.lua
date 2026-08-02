@@ -20,9 +20,23 @@ Config.ReservedNumbers = {
   ['SYS-GOV']       = 1,         -- Government Fund  -> SVB-0000001
   ['SYS-INSURANCE'] = 2,         -- Insurance Fund   -> SVB-0000002
   -- Society accounts (design §5.8) — keys must match Config.Societies ids.
-  ['lawman']        = 10,        -- Sheriff's Office -> SVB-0000010
+  -- RETIRED: 'lawman' was a placeholder for the law fund before
+  -- sovereign_lawandorder defined its real societies below. The pin stays so
+  -- nobody hands 10 to a new society and collides with the account already
+  -- seeded under it. See the note above Config.Societies.
+  ['lawman']        = 10,        -- (retired) -> SVB-0000010
   ['medical']       = 11,        -- Medical Fund     -> SVB-0000011
   ['tax_office']    = 12,        -- Tax Office       -> SVB-0000012
+  -- Law enforcement block, 20–29 (sovereign_lawandorder).
+  ['law_central']    = 20,       -- Law Enforcement Account -> SVB-0000020
+  ['law_valentine']  = 21,
+  ['law_rhodes']     = 22,
+  ['law_strawberry'] = 23,
+  ['law_armadillo']  = 24,
+  ['law_tumbleweed'] = 25,
+  ['law_vanhorn']    = 26,
+  ['law_blackwater'] = 27,
+  ['law_saintdenis'] = 28,
 }
 
 -- ============================================================================
@@ -31,13 +45,45 @@ Config.ReservedNumbers = {
 -- whitelist setup). bossGrade: minimum job grade for boss actions (view
 -- ledger, deposit/withdraw society funds, run payroll).
 -- ============================================================================
+-- LAW ENFORCEMENT (sovereign_lawandorder). These ids are a contract, not a
+-- preference: config/treasury.lua names law_central and every station in
+-- config/stations.lua names its own society. Until each exists here, that
+-- resource's treasury reads return nil and its payroll silently no-ops.
+--
+-- Only the CENTRAL fund claims the VORP jobs. Society.forJob indexes ONE
+-- society per job name and the last declaration wins, so if the station funds
+-- also claimed 'sheriff', every deputy in the county would resolve to whichever
+-- station happened to sit last in this list. A character's job is 'sheriff'
+-- whichever office they answer to — job membership genuinely cannot tell the
+-- stations apart. They are reached by id through the exports, which is how
+-- sovereign_lawandorder uses them.
+--
+-- The old 'lawman' placeholder is gone: it claimed sheriff and marshal, so
+-- leaving it would have quietly won that index over law_central. Its seeded
+-- account SVB-0000010 still exists and is now unreferenced — close it from
+-- banking_admin if it holds nothing.
 Config.Societies = {
   {
-    id = 'lawman',
-    name = "Sheriff's Office",
-    jobs = { 'sheriff', 'deputy', 'marshal' },
-    bossGrade = 3,
+    id = 'law_central',
+    name = 'Law Enforcement Account',
+    -- Job names per sovereign_lawandorder's Config.VorpJobs. 'deputy' is a
+    -- RANK on the shared ladder (tier 2), not a job, which is why it is absent.
+    jobs = { 'sheriff', 'marshal' },
+    -- Rank 6 = Deputy Marshal. Money leaves the central account on a Marshal's
+    -- approval (the Sheriff → U.S. Marshal request loop), so a station Sheriff
+    -- at rank 5 can read the fund but not draw on it.
+    bossGrade = 6,
   },
+  -- Station operating funds. bossGrade 5 = that station's Sheriff, the rank
+  -- that first carries can_treasury on the shared ladder.
+  { id = 'law_valentine',  name = "Valentine Sheriff's Office",  jobs = {}, bossGrade = 5 },
+  { id = 'law_rhodes',     name = "Rhodes Sheriff's Office",     jobs = {}, bossGrade = 5 },
+  { id = 'law_strawberry', name = "Strawberry Sheriff's Office", jobs = {}, bossGrade = 5 },
+  { id = 'law_armadillo',  name = "Armadillo Sheriff's Office",  jobs = {}, bossGrade = 5 },
+  { id = 'law_tumbleweed', name = "Tumbleweed Sheriff's Office", jobs = {}, bossGrade = 5 },
+  { id = 'law_vanhorn',    name = 'Van Horn Post',               jobs = {}, bossGrade = 5 },
+  { id = 'law_blackwater', name = 'Blackwater Station',          jobs = {}, bossGrade = 5 },
+  { id = 'law_saintdenis', name = 'Saint Denis Police Station',  jobs = {}, bossGrade = 5 },
   {
     id = 'medical',
     name = 'Medical Fund',
