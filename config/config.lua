@@ -73,10 +73,10 @@ Config.Societies = {
   {
     id = 'law_central',
     name = 'Law Enforcement Account',
-    -- $500,000. The central fund was not named in the revised station figures,
-    -- so it keeps the original endowment; it is the pool stations draw on
-    -- through the Sheriff → Marshal request loop.
-    opening = 50000000,
+    -- $1,000,000 — the pool every station draws on through the Sheriff →
+    -- U.S. Marshal request loop, so it opens with more than the eight station
+    -- funds hold between them ($530,000).
+    opening = 100000000,
     -- Job names per sovereign_lawandorder's Config.VorpJobs. 'deputy' is a
     -- RANK on the shared ladder (tier 2), not a job, which is why it is absent.
     jobs = { 'sheriff', 'marshal' },
