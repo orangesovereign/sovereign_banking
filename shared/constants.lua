@@ -63,6 +63,7 @@ Constants.Category = {
   SEIZURE       = 'seizure',         -- proceeds of lawfully seized goods
   ADMIN_ADJUST  = 'admin_adjust',
   COMPENSATION  = 'compensation',   -- reversal of a failed two-phase op
+  OPENING       = 'opening',        -- founding endowment, paid once at seeding
 }
 
 Constants.LoanStatus = {

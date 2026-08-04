@@ -62,10 +62,21 @@ Config.ReservedNumbers = {
 -- leaving it would have quietly won that index over law_central. Its seeded
 -- account SVB-0000010 still exists and is now unreferenced — close it from
 -- banking_admin if it holds nothing.
+-- `opening` (optional, minor units) is a founding endowment paid into the
+-- society's account ONCE, the first boot after it is seeded. It is a real
+-- ledgered credit, not a balance write, so reconciliation stays exact — and it
+-- is a faucet: this money enters the county economy here. Changing the number
+-- later does NOT top up an account that has already been paid; the payment is
+-- keyed by society id and will not run twice. Use banking_admin to adjust an
+-- endowed account after the fact.
 Config.Societies = {
   {
     id = 'law_central',
     name = 'Law Enforcement Account',
+    -- $500,000. The central fund was not named in the revised station figures,
+    -- so it keeps the original endowment; it is the pool stations draw on
+    -- through the Sheriff → Marshal request loop.
+    opening = 50000000,
     -- Job names per sovereign_lawandorder's Config.VorpJobs. 'deputy' is a
     -- RANK on the shared ladder (tier 2), not a job, which is why it is absent.
     jobs = { 'sheriff', 'marshal' },
@@ -75,15 +86,17 @@ Config.Societies = {
     bossGrade = 6,
   },
   -- Station operating funds. bossGrade 5 = that station's Sheriff, the rank
-  -- that first carries can_treasury on the shared ladder.
-  { id = 'law_valentine',  name = "Valentine Sheriff's Office",  jobs = {}, bossGrade = 5 },
-  { id = 'law_rhodes',     name = "Rhodes Sheriff's Office",     jobs = {}, bossGrade = 5 },
-  { id = 'law_strawberry', name = "Strawberry Sheriff's Office", jobs = {}, bossGrade = 5 },
-  { id = 'law_armadillo',  name = "Armadillo Sheriff's Office",  jobs = {}, bossGrade = 5 },
-  { id = 'law_tumbleweed', name = "Tumbleweed Sheriff's Office", jobs = {}, bossGrade = 5 },
-  { id = 'law_vanhorn',    name = 'Van Horn Post',               jobs = {}, bossGrade = 5 },
-  { id = 'law_blackwater', name = 'Blackwater Station',          jobs = {}, bossGrade = 5 },
-  { id = 'law_saintdenis', name = 'Saint Denis Police Station',  jobs = {}, bossGrade = 5 },
+  -- that first carries can_treasury on the shared ladder. Endowments are sized
+  -- by the office: $100k for the three principal stations, $50k for the county
+  -- offices, $30k for the Van Horn post.
+  { id = 'law_valentine',  name = "Valentine Sheriff's Office",  jobs = {}, bossGrade = 5, opening = 10000000 }, -- $100,000
+  { id = 'law_blackwater', name = 'Blackwater Station',          jobs = {}, bossGrade = 5, opening = 10000000 }, -- $100,000
+  { id = 'law_saintdenis', name = 'Saint Denis Police Station',  jobs = {}, bossGrade = 5, opening = 10000000 }, -- $100,000
+  { id = 'law_rhodes',     name = "Rhodes Sheriff's Office",     jobs = {}, bossGrade = 5, opening =  5000000 }, --  $50,000
+  { id = 'law_strawberry', name = "Strawberry Sheriff's Office", jobs = {}, bossGrade = 5, opening =  5000000 }, --  $50,000
+  { id = 'law_armadillo',  name = "Armadillo Sheriff's Office",  jobs = {}, bossGrade = 5, opening =  5000000 }, --  $50,000
+  { id = 'law_tumbleweed', name = "Tumbleweed Sheriff's Office", jobs = {}, bossGrade = 5, opening =  5000000 }, --  $50,000
+  { id = 'law_vanhorn',    name = 'Van Horn Post',               jobs = {}, bossGrade = 5, opening =  3000000 }, --  $30,000
   {
     id = 'medical',
     name = 'Medical Fund',

@@ -147,6 +147,54 @@ function Society.payroll(societyId, entries, meta)
   return true, { paid = paid, total = res.total, txId = res.txId, replayed = res.replayed }
 end
 
+--- Boot: pay each society's configured opening endowment, exactly once ever.
+---
+--- Two things this deliberately does NOT do:
+---
+--- It does not write the balance. The ledger is append-only and reconciliation
+--- compares the signed ledger sum against the stored balance, so a bare UPDATE
+--- would present as corruption on the next reconcile. This is a real credit
+--- through the engine, with a ledger row behind it.
+---
+--- It does not check whether the balance is already 500k. The guard is the
+--- deterministic tx_uuid: that column is UNIQUE, so the second boot replays
+--- rather than pays. This is what makes it correct to run every boot AND what
+--- makes it safe if a society is spent down to nothing — it will not quietly
+--- refill. Never change the key format for an already-endowed society; a new
+--- key is a second endowment.
+---
+--- Note this is a FAUCET: money enters the county economy here, the way it does
+--- on loan disbursement. It is categorised `opening` so it is legible as such
+--- in the ledger rather than looking like an unexplained deposit.
+function Society.ensureOpeningBalances()
+  local currency = Constants.Currency.MONEY
+  for _, soc in ipairs(Config.Societies or {}) do
+    local opening = tonumber(soc.opening)
+    if opening and opening > 0 then
+      local acct = Society.account(soc.id)
+      if not acct then
+        Log.error('opening endowment for %s skipped — it has no account', soc.id)
+      else
+        -- tx_uuid is CHAR(36). Society ids are far shorter than that, but
+        -- truncate rather than let a long one fail the insert outright.
+        local idem = ('opening:%s:%d'):format(soc.id, currency):sub(1, 36)
+        local ok, res = Money.accountCredit(acct.id, currency, opening, {
+          category = Constants.Category.OPENING,
+          memo = ('Opening endowment — %s'):format(soc.name),
+          source = 'boot',
+          idem = idem,
+        })
+        if not ok then
+          Log.error('opening endowment for %s FAILED: %s', soc.id, tostring(res))
+        elseif not res.replayed then
+          Log.info('opening endowment: %s credited %s to %s',
+            soc.id, Util.formatAmount(opening, currency), acct.account_number)
+        end
+      end
+    end
+  end
+end
+
 --- Boot seeding: a bank account per configured society, pinned to its
 --- reserved number when one is configured (design §5.1 reserved range).
 function Society.ensureAccounts()

@@ -111,6 +111,7 @@ CreateThread(function()
   Accounts.ensureSystemAccounts()
   Accounts.repairOwnerAccess()
   Society.ensureAccounts()
+  Society.ensureOpeningBalances() -- after the accounts exist; pays once ever
   Heist.ensureReserves()
   SDB.registerAll()
 
