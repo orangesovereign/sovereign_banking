@@ -102,6 +102,7 @@ Config.Societies = {
     name = 'Medical Fund',
     jobs = { 'doctor', 'nurse' },
     bossGrade = 3,
+    opening = 5000000,  -- $50,000
   },
   {
     id = 'tax_office',
